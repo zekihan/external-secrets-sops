@@ -16,6 +16,7 @@ type Config struct {
 	CacheConfig CacheConfig `yaml:"cache"`
 	LogConfig   LogConfig   `yaml:"log"`
 	UserAgent   string      `yaml:"user_agent"`
+	GitConfig   GitConfig   `yaml:"git"`
 }
 
 type CacheConfig struct {
@@ -30,6 +31,14 @@ type WebConfig struct {
 
 type LogConfig struct {
 	Level logrus.Level
+}
+
+type GitConfig struct {
+	RepoPath     string        `yaml:"repo_path"`
+	RepoURL      string        `yaml:"repo_url"`
+	AccessToken  string        `yaml:"access_token"`
+	PullInterval time.Duration `yaml:"pull_interval"`
+	SecretsPath  string        `yaml:"secrets_path"`
 }
 
 func GetConfig() *Config {
@@ -71,5 +80,12 @@ func GetDefaultConfig() *Config {
 			Level: logrus.WarnLevel,
 		},
 		UserAgent: "Golang_Spider_Bot/3.0",
+		GitConfig: GitConfig{
+			RepoPath:     "./tmp/repo",
+			RepoURL:      "",
+			AccessToken:  "",
+			PullInterval: time.Minute * 15,
+			SecretsPath:  "./",
+		},
 	}
 }
