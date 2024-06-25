@@ -1,6 +1,8 @@
 package config
 
 import (
+	"context"
+	"github.com/sethvargo/go-envconfig"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v3"
 	"io"
@@ -12,38 +14,43 @@ import (
 var config *Config
 
 type Config struct {
-	WebConfig   WebConfig   `yaml:"web"`
-	CacheConfig CacheConfig `yaml:"cache"`
-	LogConfig   LogConfig   `yaml:"log"`
-	UserAgent   string      `yaml:"user_agent"`
-	GitConfig   GitConfig   `yaml:"git"`
-}
-
-type CacheConfig struct {
-	MaxEntries int           `yaml:"max_entries"`
-	Expiration time.Duration `yaml:"expiration"`
+	WebConfig WebConfig `yaml:"web" env:", prefix=ESS__WEB_"`
+	LogConfig LogConfig `yaml:"log" env:", prefix=ESS__LOG_"`
+	GitConfig GitConfig `yaml:"git" env:", prefix=ESS__GIT_"`
 }
 
 type WebConfig struct {
-	Host string `yaml:"host"`
-	Port int    `yaml:"port"`
+	Port int `yaml:"port" env:"PORT"`
 }
 
 type LogConfig struct {
-	Level logrus.Level
+	Level    logrus.Level `yaml:"-"`
+	LevelStr string       `yaml:"level" env:"LEVEL"`
 }
 
 type GitConfig struct {
-	RepoPath     string        `yaml:"repo_path"`
-	RepoURL      string        `yaml:"repo_url"`
-	AccessToken  string        `yaml:"access_token"`
-	PullInterval time.Duration `yaml:"pull_interval"`
-	SecretsPath  string        `yaml:"secrets_path"`
+	RepoPath     string        `yaml:"repo_path" env:"REPO_PATH"`
+	RepoURL      string        `yaml:"repo_url" env:"REPO_URL"`
+	AccessToken  string        `yaml:"access_token" env:"ACCESS_TOKEN"`
+	PullInterval time.Duration `yaml:"pull_interval" env:"PULL_INTERVAL"`
+	SecretsPath  string        `yaml:"secrets_path" env:"SECRETS_PATH"`
 }
 
 func GetConfig() *Config {
 	if config == nil {
-		config = GetConfigFromFile()
+		cfg := GetConfigFromFile()
+		ctx := context.Background()
+		if err := envconfig.Process(ctx, cfg); err != nil {
+			log.Fatal(err)
+		}
+		if cfg.LogConfig.LevelStr != "" {
+			level, err := logrus.ParseLevel(cfg.LogConfig.LevelStr)
+			if err != nil {
+				log.Fatalf("Failed to parse log level: %v", err)
+			}
+			cfg.LogConfig.Level = level
+		}
+		config = cfg
 	}
 	return config
 }
@@ -69,17 +76,11 @@ func GetConfigFromFile() *Config {
 func GetDefaultConfig() *Config {
 	return &Config{
 		WebConfig: WebConfig{
-			Host: "http://localhost",
 			Port: 8080,
-		},
-		CacheConfig: CacheConfig{
-			MaxEntries: 100,
-			Expiration: time.Second * 10,
 		},
 		LogConfig: LogConfig{
 			Level: logrus.WarnLevel,
 		},
-		UserAgent: "Golang_Spider_Bot/3.0",
 		GitConfig: GitConfig{
 			RepoPath:     "./tmp/repo",
 			RepoURL:      "",
