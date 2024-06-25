@@ -83,7 +83,11 @@ func Pull() error {
 	})
 	if err != nil {
 		if errors.Is(err, git.NoErrAlreadyUpToDate) {
-			log.Info("already up to date")
+			commit, err := GetLastCommit()
+			if err != nil {
+				return nil
+			}
+			log.Info("already up to date. last commit: ", commit.String())
 			return nil
 		}
 		return err
@@ -104,6 +108,11 @@ func Pull() error {
 	if err != nil {
 		return err
 	}
+	commit, err := repo.CommitObject(newRef.Hash())
+	if err != nil {
+		return err
+	}
+	log.Info("new commit: ", commit.String())
 	return nil
 }
 
@@ -128,6 +137,9 @@ func GetLastCommit() (*object.Commit, error) {
 		return nil, err
 	}
 	commit, err := repo.CommitObject(ref.Hash())
+	if err != nil {
+		return nil, err
+	}
 	return commit, nil
 }
 
