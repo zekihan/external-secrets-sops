@@ -24,8 +24,9 @@ type WebConfig struct {
 }
 
 type LogConfig struct {
-	Level    logrus.Level `yaml:"-"`
-	LevelStr string       `yaml:"level" env:"LEVEL"`
+	Level         logrus.Level `yaml:"-"`
+	LevelStr      string       `yaml:"level" env:"LEVEL"`
+	AddMethodName bool         `yaml:"add_method_name" env:"ADD_METHOD_NAME"`
 }
 
 type GitConfig struct {
@@ -79,7 +80,8 @@ func GetDefaultConfig() *Config {
 			Port: 8080,
 		},
 		LogConfig: LogConfig{
-			Level: logrus.WarnLevel,
+			Level:         logrus.WarnLevel,
+			AddMethodName: false,
 		},
 		GitConfig: GitConfig{
 			RepoPath:     "./tmp/repo",

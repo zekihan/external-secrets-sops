@@ -44,7 +44,7 @@ func GetAllSecret(w http.ResponseWriter, r *http.Request) {
 	config := r.PathValue("config")
 	environment := r.PathValue("environment")
 	log.Debug("Endpoint: getAllSecret ", "project: ", project, " config: ", config, " environment: ", environment)
-	secrets, err := secret.GetAllSecrets(project, config, environment)
+	secrets, err := secret.GetAllSecretsComputed(project, config, environment)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		_, err := io.WriteString(w, err.Error())

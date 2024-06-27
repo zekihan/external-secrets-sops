@@ -16,7 +16,7 @@ func main() {
 	})
 	log.SetOutput(os.Stdout)
 	log.SetLevel(config.GetConfig().LogConfig.Level)
-	log.SetReportCaller(config.GetConfig().LogConfig.Level == log.DebugLevel || config.GetConfig().LogConfig.Level == log.TraceLevel)
+	log.SetReportCaller(config.GetConfig().LogConfig.AddMethodName)
 
 	go func() {
 		git.StartPullLoop()
