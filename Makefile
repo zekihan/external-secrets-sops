@@ -2,7 +2,7 @@
 MAIN_PACKAGE_PATH := ./
 BINARY_NAME := external-secrets-sops
 TMP_DIR := ./tmp
-GO_EXECUTABLE := go # go1.22.4
+GO_EXECUTABLE := go
 
 # ==================================================================================== #
 # QUALITY CONTROL
