@@ -12,16 +12,16 @@ ARCH=$(uname -m)
 if ! docker buildx &>/dev/null; then
 	latest=$(get_latest_release "docker/buildx")
 	case $ARCH in
-	"x86_64")
-		URL="https://github.com/docker/buildx/releases/latest/download/buildx-$latest.linux-amd64"
-		;;
-	"aarch64")
-		URL="https://github.com/docker/buildx/releases/latest/download/buildx-$latest.linux-arm64"
-		;;
-	*)
-		echo "Unknown architecture: $ARCH"
-		exit 1
-		;;
+		"x86_64")
+			URL="https://github.com/docker/buildx/releases/latest/download/buildx-$latest.linux-amd64"
+			;;
+		"aarch64")
+			URL="https://github.com/docker/buildx/releases/latest/download/buildx-$latest.linux-arm64"
+			;;
+		*)
+			echo "Unknown architecture: $ARCH"
+			exit 1
+			;;
 	esac
 	BIN=/usr/local/lib/docker/cli-plugins
 	sudo mkdir -p "$BIN"
@@ -32,16 +32,16 @@ fi
 if ! command -v kubectl &>/dev/null; then
 	VERSION=$(curl -L -s https://dl.k8s.io/release/stable.txt)
 	case $ARCH in
-	"x86_64")
-		URL="https://dl.k8s.io/release/$VERSION/bin/linux/amd64/kubectl"
-		;;
-	"aarch64")
-		URL="https://dl.k8s.io/release/$VERSION/bin/linux/arm64/kubectl"
-		;;
-	*)
-		echo "Unknown architecture: $ARCH"
-		exit 1
-		;;
+		"x86_64")
+			URL="https://dl.k8s.io/release/$VERSION/bin/linux/amd64/kubectl"
+			;;
+		"aarch64")
+			URL="https://dl.k8s.io/release/$VERSION/bin/linux/arm64/kubectl"
+			;;
+		*)
+			echo "Unknown architecture: $ARCH"
+			exit 1
+			;;
 	esac
 	BIN=/usr/local/bin/kubectl
 	sudo curl -sSL "$URL" -o "$BIN"
@@ -54,7 +54,9 @@ fi
 
 mkdir -p "$HOME/.kube"
 
-echo "$KUBECONFIG_DATA" >"$HOME/.kube/config"
+if [ ! -f "$HOME/.kube/config" ]; then
+	echo "$KUBECONFIG_DATA" >"$HOME/.kube/config"
+fi
 
 UUID=$(uuidgen)
 echo "$UUID"
