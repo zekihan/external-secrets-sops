@@ -9,7 +9,6 @@ WORKDIR /go/src/github.com/zekihan/external-secrets-sops
 RUN apk add --no-cache git ca-certificates make
 
 COPY go.mod .
-COPY go.sum .
 
 ENV CGO_ENABLED=0 GO111MODULE=on GOOS=linux
 
