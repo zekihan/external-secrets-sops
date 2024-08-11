@@ -6,6 +6,7 @@ import (
 	"github.com/zekihan/external-secrets-sops/config"
 	"github.com/zekihan/external-secrets-sops/git"
 	"github.com/zekihan/external-secrets-sops/routes"
+	"github.com/zekihan/external-secrets-sops/utils"
 	"net/http"
 	"os"
 )
@@ -17,6 +18,8 @@ func main() {
 	log.SetOutput(os.Stdout)
 	log.SetLevel(config.GetConfig().LogConfig.Level)
 	log.SetReportCaller(config.GetConfig().LogConfig.AddMethodName)
+
+	log.Infof("Starting headless broadcaster %s in %s", utils.GetVersion(), utils.GetEnvironment())
 
 	go func() {
 		git.StartPullLoop()

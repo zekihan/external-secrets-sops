@@ -1,12 +1,5 @@
-FROM golang:1.22.6-alpine AS builder
-
-ARG GITHUB_TOKEN
-
-# Setup
-RUN mkdir -p /go/src/github.com/zekihan/external-secrets-sops
-WORKDIR /go/src/github.com/zekihan/external-secrets-sops
-
-RUN apk add --no-cache git ca-certificates make
+FROM golang:1.22.6 AS builder
+WORKDIR /app
 
 COPY go.mod .
 COPY go.sum .
@@ -17,11 +10,11 @@ RUN go mod download
 
 COPY . .
 
-RUN make build
+RUN ./build.sh
 
 # Copy into scratch container
 FROM scratch
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --from=builder /go/src/github.com/zekihan/external-secrets-sops/tmp/bin/external-secrets-sops ./
+COPY --from=builder /app/tmp/bin/external-secrets-sops ./
 
 ENTRYPOINT ["./external-secrets-sops"]
