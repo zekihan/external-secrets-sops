@@ -1,6 +1,6 @@
 module github.com/zekihan/external-secrets-sops
 
-go 1.22.6
+go 1.23.0
 
 require (
 	github.com/getsops/sops/v3 v3.9.0
