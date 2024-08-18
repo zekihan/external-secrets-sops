@@ -12,18 +12,20 @@ import (
 	"time"
 )
 
+const EnvKeyPrefix = "ESS__"
 const defaultConfigFile = "config.yaml"
 
 var config *Config
 
 type Config struct {
-	WebConfig WebConfig `yaml:"web" env:", prefix=ESS__WEB_"`
-	LogConfig LogConfig `yaml:"log" env:", prefix=ESS__LOG_"`
-	GitConfig GitConfig `yaml:"git" env:", prefix=ESS__GIT_"`
+	WebConfig WebConfig `yaml:"web" env:", prefix=WEB_"`
+	LogConfig LogConfig `yaml:"log" env:", prefix=LOG_"`
+	GitConfig GitConfig `yaml:"git" env:", prefix=GIT_"`
 }
 
 type WebConfig struct {
-	Port int `yaml:"port" env:"PORT"`
+	Host string `yaml:"host" env:"HOST"`
+	Port int    `yaml:"port" env:"PORT"`
 }
 
 type LogConfig struct {
@@ -44,8 +46,11 @@ func GetConfig() *Config {
 	if config == nil {
 		cfg := GetConfigFromFile()
 		ctx := context.Background()
-		if err := envconfig.Process(ctx, cfg); err != nil {
-			log.Fatal(err)
+		if err := envconfig.ProcessWith(ctx, &envconfig.Config{
+			Target:   cfg,
+			Lookuper: envconfig.PrefixLookuper(EnvKeyPrefix, envconfig.OsLookuper()),
+		}); err != nil {
+			log.Fatalf("Failed to process env config: %v", err)
 		}
 		if cfg.LogConfig.LevelStr != "" {
 			level, err := logrus.ParseLevel(cfg.LogConfig.LevelStr)
@@ -97,6 +102,7 @@ func getConfigFilePath() string {
 func GetDefaultConfig() *Config {
 	return &Config{
 		WebConfig: WebConfig{
+			Host: "127.0.0.1",
 			Port: 8080,
 		},
 		LogConfig: LogConfig{
