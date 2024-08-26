@@ -44,6 +44,11 @@ test/cover:
 build:
 	export GO_EXECUTABLE="${GO_EXECUTABLE}" && export TMP_DIR="${TMP_DIR}" && export BINARY_NAME="${BINARY_NAME}" && export ENVIRONMENT="development" && export VERSION="local" && ./scripts/build.sh
 
+## build: build the application
+.PHONY: build_deps
+build_deps:
+	export GO_EXECUTABLE="${GO_EXECUTABLE}" && export TMP_DIR="${TMP_DIR}" && export BINARY_NAME="${BINARY_NAME}" && export ENVIRONMENT="development" && export VERSION="local" && ./scripts/build_deps.sh
+
 ## run: run the  application
 .PHONY: run
 run:
