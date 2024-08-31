@@ -5,20 +5,25 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/zekihan/external-secrets-sops/config"
 	"github.com/zekihan/external-secrets-sops/git"
-	"github.com/zekihan/external-secrets-sops/routes"
+	"github.com/zekihan/external-secrets-sops/routes/api"
+	"github.com/zekihan/external-secrets-sops/routes/errorRoutes"
+	"github.com/zekihan/external-secrets-sops/routes/middleware"
 	"github.com/zekihan/external-secrets-sops/utils"
 	"net/http"
-	"os"
 )
 
+var stdChain middleware.Chain
+var cfg *config.Config
+
 func init() {
-	config.GetConfig()
-	log.SetFormatter(&log.TextFormatter{
-		FullTimestamp: true,
-	})
-	log.SetOutput(os.Stdout)
-	log.SetLevel(config.GetConfig().LogConfig.Level)
-	log.SetReportCaller(config.GetConfig().LogConfig.AddMethodName)
+	// init config
+	cfg = config.GetConfig()
+
+	// init logger
+	utils.InitLogger(cfg)
+
+	// init middleware
+	stdChain = middleware.New(middleware.RecoverHandler, middleware.Logging)
 }
 
 func main() {
@@ -28,18 +33,38 @@ func main() {
 		git.StartPullLoop()
 	}()
 
-	http.HandleFunc("/ping", routes.GetPing)
-	http.HandleFunc("/health", routes.GetHealth)
-	http.HandleFunc("/ready", routes.GetReady)
-	http.HandleFunc("/git/lastCommit", routes.GetCommit)
-	http.HandleFunc("/git/forceSync", routes.ForceSync)
-	http.HandleFunc("/secret/{project}/{config}/{environment}", routes.GetAllSecret)
-	http.HandleFunc("/secret/{project}/{config}/{environment}/{key}", routes.GetSecret)
+	// API routes
+	http.HandleFunc("/api/ping", api.GetPing)
+	http.HandleFunc("/api/health", api.GetHealth)
+	http.HandleFunc("/api/ready", api.GetReady)
 
-	host := config.GetConfig().WebConfig.Host
-	port := config.GetConfig().WebConfig.Port
-	log.Infof("Starting web server on %s:%d", host, port)
-	err := http.ListenAndServe(fmt.Sprintf("%s:%d", host, port), nil)
+	// git routes
+	http.HandleFunc("/git/lastCommit", api.GetCommit)
+	http.HandleFunc("/git/forceSync", api.ForceSync)
+
+	// Secret routes
+	http.HandleFunc("/secret/{project}/{config}/{environment}", api.GetAllSecret)
+	http.HandleFunc("/secret/{project}/{config}/{environment}/{key}", api.GetSecret)
+
+	// Error routes
+	http.HandleFunc("/404", errorRoutes.GetNotFound)
+	http.HandleFunc("/5xx", errorRoutes.Get5xx)
+
+	// Redirect all other paths
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		// Redirect root path to dashboard
+		if r.URL.Path == "/" {
+			http.Redirect(w, r, "/dashboard", http.StatusMovedPermanently)
+			return
+		}
+		// Redirect all other paths to 404
+		http.Redirect(w, r, "/404", http.StatusMovedPermanently)
+	})
+
+	port := cfg.WebConfig.Port
+	host := cfg.WebConfig.Host
+	log.Infof("Starting server on %s:%d", host, port)
+	err := http.ListenAndServe(fmt.Sprintf("%s:%d", host, port), stdChain.Then(http.DefaultServeMux))
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -32,6 +32,7 @@ type LogConfig struct {
 	Level         logrus.Level `yaml:"-"`
 	LevelStr      string       `yaml:"level" env:"LEVEL"`
 	AddMethodName bool         `yaml:"add_method_name" env:"ADD_METHOD_NAME"`
+	Path          string       `yaml:"path" env:"PATH"`
 }
 
 type GitConfig struct {

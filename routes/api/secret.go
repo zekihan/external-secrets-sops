@@ -1,10 +1,10 @@
-package routes
+package api
 
 import (
 	"encoding/json"
 	log "github.com/sirupsen/logrus"
+	"github.com/zekihan/external-secrets-sops/routes"
 	"github.com/zekihan/external-secrets-sops/secret"
-	"io"
 	"net/http"
 )
 
@@ -15,28 +15,15 @@ func GetSecret(w http.ResponseWriter, r *http.Request) {
 	key := r.PathValue("key")
 	log.Debug("Endpoint: getSecret ", "project: ", project, " config: ", config, " environment: ", environment, " key: ", key)
 	getSecret, err := secret.GetSecret(project, config, environment, key)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, err := io.WriteString(w, err.Error())
-		if err != nil {
-			return
-		}
+	if routes.CheckError(w, err, http.StatusInternalServerError, "Failed to get secret") {
 		return
 	}
 	response := Response{Value: getSecret}
 	bytes, err := json.Marshal(response)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, err := io.WriteString(w, err.Error())
-		if err != nil {
-			return
-		}
+	if routes.CheckError(w, err, http.StatusInternalServerError, "Failed to marshal response") {
 		return
 	}
-	_, err = w.Write(bytes)
-	if err != nil {
-		return
-	}
+	routes.Write(w, bytes)
 }
 
 func GetAllSecret(w http.ResponseWriter, r *http.Request) {
@@ -45,28 +32,15 @@ func GetAllSecret(w http.ResponseWriter, r *http.Request) {
 	environment := r.PathValue("environment")
 	log.Debug("Endpoint: getAllSecret ", "project: ", project, " config: ", config, " environment: ", environment)
 	secrets, err := secret.GetAllSecretsComputed(project, config, environment)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, err := io.WriteString(w, err.Error())
-		if err != nil {
-			return
-		}
+	if routes.CheckError(w, err, http.StatusInternalServerError, "Failed to get secret") {
 		return
 	}
 	response := Response{Values: secrets}
 	bytes, err := json.Marshal(response)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, err := io.WriteString(w, err.Error())
-		if err != nil {
-			return
-		}
+	if routes.CheckError(w, err, http.StatusInternalServerError, "Failed to marshal response") {
 		return
 	}
-	_, err = w.Write(bytes)
-	if err != nil {
-		return
-	}
+	routes.Write(w, bytes)
 }
 
 type Response struct {
