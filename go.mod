@@ -5,7 +5,7 @@ go 1.23.4
 require (
 	github.com/felixge/httpsnoop v1.0.4
 	github.com/getsops/sops/v3 v3.9.2
-	github.com/go-git/go-git/v5 v5.13.0
+	github.com/go-git/go-git/v5 v5.13.1
 	github.com/sethvargo/go-envconfig v1.1.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/snowzach/rotatefilehook v0.0.0-20220211133110-53752135082d
@@ -63,14 +63,14 @@ require (
 	github.com/cloudflare/circl v1.4.0 // indirect
 	github.com/cncf/xds/go v0.0.0-20240905190251-b4127c9b8d78 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.5 // indirect
-	github.com/cyphar/filepath-securejoin v0.2.5 // indirect
+	github.com/cyphar/filepath-securejoin v0.3.6 // indirect
 	github.com/emirpasic/gods v1.18.1 // indirect
 	github.com/envoyproxy/go-control-plane v0.13.0 // indirect
 	github.com/envoyproxy/protoc-gen-validate v1.1.0 // indirect
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/getsops/gopgagent v0.0.0-20240527072608-0c14999532fe // indirect
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
-	github.com/go-git/go-billy/v5 v5.6.0 // indirect
+	github.com/go-git/go-billy/v5 v5.6.1 // indirect
 	github.com/go-jose/go-jose/v4 v4.0.4 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
