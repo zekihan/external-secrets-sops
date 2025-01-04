@@ -1,3 +1,6 @@
+FROM --platform=$BUILDPLATFORM alpine:3.21.0@sha256:21dc6063fd678b478f57c0e13f47560d0ea4eeba26dfc947b2a4f81f686b9f45 AS certs
+RUN apk update && apk add ca-certificates
+
 FROM --platform=$BUILDPLATFORM busybox:1.37.0@sha256:2919d0172f7524b2d8df9e50066a682669e6d170ac0f6a49676d54358fe970b5 AS builder
 
 ARG TARGETPLATFORM
@@ -18,6 +21,7 @@ RUN case ${TARGETPLATFORM} in \
 
 FROM scratch AS final
 
+COPY --from=certs /etc/ssl/certs /etc/ssl/certs
 COPY --from=builder /usr/bin/external-secrets-sops /usr/bin/external-secrets-sops
 
 ENTRYPOINT ["external-secrets-sops"]
