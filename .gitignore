@@ -20,4 +20,10 @@
 # Go workspace file
 go.work
 go.work.sum
+
+# Added by goreleaser init:
+dist/
+
+# Others
 tmp/
+.env

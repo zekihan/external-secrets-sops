@@ -1,0 +1,13 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Run" type="GoApplicationRunConfiguration" factoryName="Go Application">
+    <module name="external-secrets-sops" />
+    <working_directory value="$PROJECT_DIR$" />
+    <kind value="DIRECTORY" />
+    <package value="github.com/zekihan/external-secrets-sops" />
+    <directory value="$PROJECT_DIR$" />
+    <filePath value="$PROJECT_DIR$" />
+    <method v="2">
+      <option name="ToolBeforeRunTask" enabled="true" actionId="Tool_External Tools_dump env" />
+    </method>
+  </configuration>
+</component>
