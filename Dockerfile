@@ -5,7 +5,7 @@ FROM --platform=$BUILDPLATFORM busybox:1.37.0@sha256:2919d0172f7524b2d8df9e50066
 
 ARG TARGETPLATFORM
 
-COPY dist/* /usr/bin/
+COPY ./dist ./dist
 
 RUN case ${TARGETPLATFORM} in \
         "linux/amd64")    ARCH="amd64"    ;; \
@@ -14,10 +14,10 @@ RUN case ${TARGETPLATFORM} in \
         "linux/ppc64le")  ARCH="ppc64le"  ;; \
         "linux/s390x")    ARCH="s390x"    ;; \
         "linux/386")      ARCH="386"      ;; \
-        "linux/arm/v7")   ARCH="arm_v7"   ;; \
-        "linux/arm/v6")   ARCH="arm_v6"   ;; \
+        "linux/arm/v7")   ARCH="armv7"   ;; \
+        "linux/arm/v6")   ARCH="armv6"   ;; \
     esac && \
-    mv /usr/bin/external-secrets-sops_linux_${ARCH} /usr/bin/external-secrets-sops
+    mv ./dist/external-secrets-sops_linux_${ARCH}/external-secrets-sops /usr/bin/external-secrets-sops
 
 FROM scratch AS final
 
