@@ -5,7 +5,7 @@ go 1.24.2
 require (
 	github.com/felixge/httpsnoop v1.0.4
 	github.com/getsops/sops/v3 v3.10.2
-	github.com/go-git/go-git/v5 v5.15.0
+	github.com/go-git/go-git/v5 v5.16.0
 	github.com/joho/godotenv v1.5.1
 	github.com/sethvargo/go-envconfig v1.2.0
 	github.com/sirupsen/logrus v1.9.3
