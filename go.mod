@@ -1,6 +1,6 @@
 module github.com/zekihan/external-secrets-sops
 
-go 1.24.3
+go 1.24.4
 
 require (
 	github.com/felixge/httpsnoop v1.0.4
