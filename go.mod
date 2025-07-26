@@ -7,6 +7,7 @@ require (
 	github.com/getsops/sops/v3 v3.10.2
 	github.com/go-git/go-git/v5 v5.16.2
 	github.com/joho/godotenv v1.5.1
+	github.com/justinas/alice v1.2.0
 	github.com/sethvargo/go-envconfig v1.3.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/snowzach/rotatefilehook v0.0.0-20220211133110-53752135082d

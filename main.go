@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/joho/godotenv"
+	"github.com/justinas/alice"
 	log "github.com/sirupsen/logrus"
 	"github.com/zekihan/external-secrets-sops/config"
 	"github.com/zekihan/external-secrets-sops/git"
@@ -14,7 +15,7 @@ import (
 	"os"
 )
 
-var stdChain middleware.Chain
+var stdChain alice.Chain
 var cfg *config.Config
 
 func init() {
@@ -33,7 +34,7 @@ func init() {
 	utils.InitLogger(cfg)
 
 	// init middleware
-	stdChain = middleware.New(middleware.RecoverHandler, middleware.Logging)
+	stdChain = alice.New(middleware.RecoverHandler, middleware.Logging)
 }
 
 func main() {
