@@ -38,7 +38,7 @@ func init() {
 
 func main() {
 	log.Info("Starting external secrets sops server")
-	log.Infof(utils.GetStartupInfo())
+	log.Info(utils.GetStartupInfo())
 
 	go func() {
 		git.StartPullLoop()
