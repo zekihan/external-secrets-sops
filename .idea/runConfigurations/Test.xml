@@ -2,6 +2,9 @@
   <configuration default="false" name="Test" type="GoTestRunConfiguration" factoryName="Go Test">
     <module name="external-secrets-sops" />
     <working_directory value="$PROJECT_DIR$" />
+    <envs>
+      <env name="CONFIG_DIR" value="$PROJECT_DIR$" />
+    </envs>
     <kind value="DIRECTORY" />
     <package value="github.com/zekihan/external-secrets-sops" />
     <directory value="$PROJECT_DIR$" />
