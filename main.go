@@ -2,15 +2,17 @@ package main
 
 import (
 	"fmt"
-	"github.com/joho/godotenv"
 	"github.com/justinas/alice"
 	log "github.com/sirupsen/logrus"
 	"github.com/zekihan/external-secrets-sops/config"
 	"github.com/zekihan/external-secrets-sops/git"
 	"github.com/zekihan/external-secrets-sops/routes/api"
-	"github.com/zekihan/external-secrets-sops/routes/errorRoutes"
-	"github.com/zekihan/external-secrets-sops/routes/middleware"
-	"github.com/zekihan/external-secrets-sops/utils"
+	"github.com/zekihan/go-commons/environment"
+	"github.com/zekihan/go-commons/middleware"
+	"github.com/zekihan/go-commons/utils"
+	"github.com/zekihan/go-commons/web/errorroutes"
+	"github.com/zekihan/go-commons/web/health"
+	"github.com/zekihan/go-commons/web/ping"
 	"net/http"
 	"os"
 )
@@ -19,19 +21,25 @@ var stdChain alice.Chain
 var cfg *config.Config
 
 func init() {
-	envFile := ".env"
-	if f, err := os.Stat(envFile); !(os.IsNotExist(err) || f.IsDir()) {
-		err = godotenv.Load()
-		if err != nil {
-			panic("Error loading .env file")
-		}
+	err := environment.LoadEnvironmentFile()
+	if err != nil {
+		log.Errorf("Error loading environment file: %v", err)
+		os.Exit(1)
 	}
 
 	// init config
 	cfg = config.GetConfig()
 
 	// init logger
-	utils.InitLogger(cfg)
+	err = utils.InitLogger(&utils.LoggerConfig{
+		Path:          cfg.LogConfig.Path,
+		Level:         cfg.LogConfig.Level,
+		AddMethodName: cfg.LogConfig.AddMethodName,
+	})
+	if err != nil {
+		log.Errorf("Error initializing logger: %v", err)
+		os.Exit(1)
+	}
 
 	// init middleware
 	stdChain = alice.New(middleware.RecoverHandler, middleware.Logging)
@@ -46,8 +54,8 @@ func main() {
 	}()
 
 	// API routes
-	http.HandleFunc("/api/ping", api.GetPing)
-	http.HandleFunc("/api/health", api.GetHealth)
+	http.HandleFunc("/api/ping", ping.GetPing)
+	http.HandleFunc("/api/health", health.GetHealth)
 	http.HandleFunc("/api/ready", api.GetReady)
 
 	// git routes
@@ -59,8 +67,8 @@ func main() {
 	http.HandleFunc("/secret/{project}/{config}/{environment}/{key}", api.GetSecret)
 
 	// Error routes
-	http.HandleFunc("/404", errorRoutes.GetNotFound)
-	http.HandleFunc("/5xx", errorRoutes.Get5xx)
+	http.HandleFunc("/404", errorroutes.GetNotFound)
+	http.HandleFunc("/5xx", errorroutes.Get5xx)
 
 	// Redirect all other paths
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
