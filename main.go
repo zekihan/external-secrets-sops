@@ -50,7 +50,11 @@ func main() {
 	log.Info(utils.GetStartupInfo())
 
 	go func() {
-		git.StartPullLoop()
+		if cfg.GitConfig.RepoURL != "" {
+			git.StartPullLoop()
+		} else {
+			log.Warn("Git repository URL is not configured, skipping git pulling")
+		}
 	}()
 
 	// API routes
