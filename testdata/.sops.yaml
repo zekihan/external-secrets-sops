@@ -1,0 +1,10 @@
+stores:
+  json:
+    indent: 2
+  json_binary:
+    indent: 2
+  yaml:
+    indent: 2
+
+creation_rules:
+  - age: "age17jc9ncn8vpajqjq3sfcpuyp30netw68qm3jnmez6asngdeg0zd6qcqv2nd"

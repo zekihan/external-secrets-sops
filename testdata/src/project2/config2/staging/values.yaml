@@ -1,0 +1,13 @@
+ENVIRONMENT_UNENCRYPTED: staging
+MONGODB_URI: mongodb://staging-mongo.example.com:27017/myapp
+MONGODB_USER: staging_mongo_user
+MONGODB_PASSWORD: staging_mongo_pass_123
+ELASTICSEARCH_URL: https://staging-es.example.com:9200
+ELASTICSEARCH_USERNAME: elastic
+ELASTICSEARCH_PASSWORD: elastic_pass_456
+RABBITMQ_URL: amqp://staging-rabbitmq.example.com:5672
+RABBITMQ_USER: rabbit_user
+RABBITMQ_PASS: rabbit_pass_789
+S3_BUCKET_UNENCRYPTED: staging-app-bucket
+S3_ACCESS_KEY: AKIAIOSFODNN7EXAMPLE
+S3_SECRET_KEY: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY

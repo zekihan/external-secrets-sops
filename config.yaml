@@ -4,8 +4,8 @@ web:
 log:
     level: debug
 git:
-    repo_path: ./tmp/repo
-    repo_url: https://github.com/example/secrets.git
+    repo_path: tmp/repo
+    repo_url: testdata
     access_token: ""
     poll_interval: 15m
     secrets_path: ./generated

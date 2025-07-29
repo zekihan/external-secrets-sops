@@ -1,0 +1,7 @@
+SERVICE_NAME_UNENCRYPTED: auth-service
+VERSION_UNENCRYPTED: 1.0.0
+OAUTH_CLIENT_ID: oauth_client_123
+OAUTH_CLIENT_SECRET: oauth_secret_xyz789
+WEBHOOK_SECRET: webhook_signing_secret_456
+ENCRYPTION_KEY: base64_encoded_encryption_key_789
+THIRD_PARTY_API_TOKEN: third_party_token_abc123
