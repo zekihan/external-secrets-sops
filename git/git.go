@@ -2,6 +2,7 @@ package git
 
 import (
 	"errors"
+	"fmt"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
@@ -10,12 +11,14 @@ import (
 	"github.com/zekihan/external-secrets-sops/config"
 	"os"
 	"path"
+	"sync/atomic"
 	"time"
 )
 
-var quit chan bool
+var quit = make(chan bool)
+var loopRunning = atomic.Bool{}
 
-func clone() error {
+func Clone() error {
 	repoPath := config.GetConfig().GitConfig.RepoPath
 	repoURL := config.GetConfig().GitConfig.RepoURL
 	if repoURL == "" {
@@ -41,17 +44,19 @@ func clone() error {
 			}
 		}
 	}
-
-	_, err := git.PlainClone(repoPath, false, &git.CloneOptions{
+	cloneOptions := &git.CloneOptions{
 		URL:      repoURL,
 		Progress: log.StandardLogger().Writer(),
-		Auth: &http.BasicAuth{
+	}
+	if config.GetConfig().GitConfig.AccessToken != "" {
+		cloneOptions.Auth = &http.BasicAuth{
 			Username: "X", // anything except an empty string
 			Password: config.GetConfig().GitConfig.AccessToken,
-		},
-	})
+		}
+	}
+	_, err := git.PlainClone(repoPath, false, cloneOptions)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to clone %s repository: %w", repoURL, err)
 	}
 	return nil
 }
@@ -59,28 +64,30 @@ func clone() error {
 func Pull() error {
 	repoPath := config.GetConfig().GitConfig.RepoPath
 	if _, err := os.Stat(path.Join(repoPath, ".git")); os.IsNotExist(err) {
-		err := clone()
+		err := Clone()
 		if err != nil {
-			return err
+			return fmt.Errorf("git clone failed: %v", err)
 		}
 	}
 
 	repo, err := git.PlainOpen(repoPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to open git repository: %w", err)
 	}
 
 	remote, err := repo.Remote("origin")
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get remote 'origin': %w", err)
 	}
 
-	err = remote.Fetch(&git.FetchOptions{
-		Auth: &http.BasicAuth{
+	fetchOptions := &git.FetchOptions{}
+	if config.GetConfig().GitConfig.AccessToken != "" {
+		fetchOptions.Auth = &http.BasicAuth{
 			Username: "X", // anything except an empty string
 			Password: config.GetConfig().GitConfig.AccessToken,
-		},
-	})
+		}
+	}
+	err = remote.Fetch(fetchOptions)
 	if err != nil {
 		if errors.Is(err, git.NoErrAlreadyUpToDate) {
 			commit, err := GetLastCommit()
@@ -90,15 +97,15 @@ func Pull() error {
 			log.Info("already up to date. last commit: ", commit.String())
 			return nil
 		}
-		return err
+		return fmt.Errorf("failed to fetch from remote: %w", err)
 	}
 	newRef, err := repo.Reference(plumbing.NewRemoteReferenceName("origin", "main"), false)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get reference for origin/main: %w", err)
 	}
 	wt, err := repo.Worktree()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get worktree: %w", err)
 	}
 
 	err = wt.Reset(&git.ResetOptions{
@@ -106,11 +113,11 @@ func Pull() error {
 		Mode:   git.HardReset,
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to reset worktree: %w", err)
 	}
 	commit, err := repo.CommitObject(newRef.Hash())
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get commit object: %w", err)
 	}
 	log.Info("new commit: ", commit.String())
 	return nil
@@ -144,12 +151,14 @@ func GetLastCommit() (*object.Commit, error) {
 }
 
 func StartPullLoop() {
+	if !loopRunning.CompareAndSwap(false, true) {
+		return // Already running
+	}
 	err := Pull()
 	if err != nil {
 		log.Error(err)
 	}
 	ticker := time.NewTicker(config.GetConfig().GitConfig.PullInterval)
-	quit = make(chan bool)
 	go func() {
 		for {
 			select {
@@ -159,6 +168,7 @@ func StartPullLoop() {
 					log.Error(err)
 				}
 			case <-quit:
+				loopRunning.Store(false)
 				ticker.Stop()
 				return
 			}
