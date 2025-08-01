@@ -1,6 +1,3 @@
-FROM --platform=$BUILDPLATFORM alpine:3.22.1@sha256:4bcff63911fcb4448bd4fdacec207030997caf25e9bea4045fa6c8c44de311d1 AS certs
-RUN apk update && apk add ca-certificates
-
 FROM --platform=$BUILDPLATFORM busybox:1.37.0@sha256:f9a104fddb33220ec80fc45a4e606c74aadf1ef7a3832eb0b05be9e90cd61f5f AS builder
 
 ARG TARGETPLATFORM
@@ -19,9 +16,8 @@ RUN case ${TARGETPLATFORM} in \
     esac && \
     mv ./dist/external-secrets-sops_linux_${ARCH}/external-secrets-sops /usr/bin/external-secrets-sops
 
-FROM scratch AS final
+FROM --platform=$BUILDPLATFORM zekihan/distroless:v0.1.0@sha256:10b374be9f7ce8e4a9fbb14a3ed548267dcb50cbfc8e5a403142146199a4d380 AS final
 
-COPY --from=certs /etc/ssl/certs /etc/ssl/certs
 COPY --from=builder /usr/bin/external-secrets-sops /usr/bin/external-secrets-sops
 
 ENTRYPOINT ["external-secrets-sops"]
