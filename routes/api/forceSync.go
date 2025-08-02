@@ -1,9 +1,11 @@
 package api
 
 import (
-	"github.com/zekihan/external-secrets-sops/git"
-	"github.com/zekihan/go-commons/web"
 	"net/http"
+
+	"github.com/zekihan/go-commons/web"
+
+	"github.com/zekihan/external-secrets-sops/git"
 )
 
 func ForceSync(w http.ResponseWriter, r *http.Request) {
@@ -11,5 +13,6 @@ func ForceSync(w http.ResponseWriter, r *http.Request) {
 	if web.CheckError(w, err, http.StatusInternalServerError, "Failed to pull") {
 		return
 	}
+
 	web.WriteString(w, "Synced\n")
 }

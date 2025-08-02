@@ -8,9 +8,9 @@ import (
 )
 
 func TestForceSync_Success(t *testing.T) {
-	_, _, cleanup := setupTestRepo(t)
-	t.Cleanup(cleanup)
-	req := httptest.NewRequest(http.MethodPost, "/force-sync", nil)
+	_ = setupTestRepo(t)
+
+	req := httptest.NewRequest(http.MethodPost, "/force-sync", http.NoBody)
 	w := httptest.NewRecorder()
 
 	ForceSync(w, req)
@@ -23,7 +23,12 @@ func TestForceSync_Success(t *testing.T) {
 	}
 
 	buf := new(bytes.Buffer)
-	buf.ReadFrom(resp.Body)
+
+	_, err := buf.ReadFrom(resp.Body)
+	if err != nil {
+		t.Fatalf("failed to read response body: %v", err)
+	}
+
 	got := buf.String()
 
 	expected := "Synced\n"

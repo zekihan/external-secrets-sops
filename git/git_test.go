@@ -1,7 +1,6 @@
 package git
 
 import (
-	"github.com/zekihan/external-secrets-sops/config"
 	"os"
 	"path/filepath"
 	"testing"
@@ -10,9 +9,11 @@ import (
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
+
+	"github.com/zekihan/external-secrets-sops/config"
 )
 
-func setupTestRepo(t *testing.T) (string, string, func()) {
+func setupTestRepo(t *testing.T) (string, string) {
 	t.Helper()
 	remoteTmpDir := t.TempDir()
 	localTmpDir := t.TempDir()
@@ -20,10 +21,10 @@ func setupTestRepo(t *testing.T) (string, string, func()) {
 
 	// Create a file and commit it
 	file := filepath.Join(remoteTmpDir, "test.txt")
-	_ = os.WriteFile(file, []byte("hello"), 0600)
-	w, _ := repo.Worktree()
-	_, _ = w.Add("test.txt")
-	commitObj, _ := w.Commit("initial commit", &git.CommitOptions{
+	_ = os.WriteFile(file, []byte("hello"), 0o600)
+	workTree, _ := repo.Worktree()
+	_, _ = workTree.Add("test.txt")
+	commitObj, _ := workTree.Commit("initial commit", &git.CommitOptions{
 		Author: &object.Signature{
 			Name:  "tester",
 			Email: "tester@example.com",
@@ -34,7 +35,7 @@ func setupTestRepo(t *testing.T) (string, string, func()) {
 	// Create 'main' branch pointing to the initial commit and checkout to it
 	mainRefName := plumbing.NewBranchReferenceName("main")
 	_ = repo.Storer.SetReference(plumbing.NewHashReference(mainRefName, commitObj))
-	_ = w.Checkout(&git.CheckoutOptions{Branch: mainRefName})
+	_ = workTree.Checkout(&git.CheckoutOptions{Branch: mainRefName})
 
 	// Set config for the test
 	origConfig := config.GetConfig().GitConfig
@@ -44,29 +45,38 @@ func setupTestRepo(t *testing.T) (string, string, func()) {
 	config.GetConfig().GitConfig.PullInterval = time.Second
 
 	cleanup := func() {
-		os.RemoveAll(remoteTmpDir)
-		os.RemoveAll(localTmpDir)
+		err := os.RemoveAll(remoteTmpDir)
+		if err != nil {
+			t.Errorf("failed to remove remote tmp dir: %v", err)
+		}
+
+		err = os.RemoveAll(localTmpDir)
+		if err != nil {
+			t.Errorf("failed to remove local tmp dir: %v", err)
+		}
+
 		config.GetConfig().GitConfig = origConfig
 	}
-	return remoteTmpDir, localTmpDir, cleanup
+	t.Cleanup(cleanup)
+
+	return remoteTmpDir, localTmpDir
 }
 
 func TestIsDirExists(t *testing.T) {
-	remoteTmpDir, localTmpDir, cleanup := setupTestRepo(t)
-	t.Cleanup(cleanup)
+	remoteTmpDir, localTmpDir := setupTestRepo(t)
 
 	gitDir := filepath.Join(remoteTmpDir, ".git")
 	if !isDirExists(gitDir) {
 		t.Errorf(".git dir should exist")
 	}
+
 	if isDirExists(filepath.Join(localTmpDir, "not-exist")) {
 		t.Errorf("non-existent dir should not exist")
 	}
 }
 
 func TestIsRepoReady(t *testing.T) {
-	_, _, cleanup := setupTestRepo(t)
-	t.Cleanup(cleanup)
+	_, _ = setupTestRepo(t)
 
 	err := Clone()
 	if err != nil {
@@ -79,8 +89,7 @@ func TestIsRepoReady(t *testing.T) {
 }
 
 func TestGetLastCommit(t *testing.T) {
-	_, _, cleanup := setupTestRepo(t)
-	t.Cleanup(cleanup)
+	_, _ = setupTestRepo(t)
 
 	err := Clone()
 	if err != nil {
@@ -91,14 +100,14 @@ func TestGetLastCommit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetLastCommit failed: %v", err)
 	}
+
 	if commit.Message != "initial commit" {
 		t.Errorf("unexpected commit message: %s", commit.Message)
 	}
 }
 
 func TestCloneAndPull(t *testing.T) {
-	_, _, cleanup := setupTestRepo(t)
-	t.Cleanup(cleanup)
+	_, _ = setupTestRepo(t)
 
 	err := Clone()
 	if err != nil {
@@ -116,32 +125,31 @@ func TestCloneAndPull(t *testing.T) {
 }
 
 func TestStartAndStopPullLoop(t *testing.T) {
-	_, _, cleanup := setupTestRepo(t)
-	t.Cleanup(cleanup)
+	_, _ = setupTestRepo(t)
 
 	go StartPullLoop()
-	time.Sleep(2 * time.Second)
+
+	time.Sleep(2 * time.Second) //nolint:forbidigo // not production code, just for testing
 	StopPullLoop()
 }
 
 func TestClone_EmptyRepoURL(t *testing.T) {
-	_, localTmpDir, cleanup := setupTestRepo(t)
-	t.Cleanup(cleanup)
+	_, localTmpDir := setupTestRepo(t)
 
 	origRepoURL := config.GetConfig().GitConfig.RepoURL
 	config.GetConfig().GitConfig.RepoURL = ""
 	config.GetConfig().GitConfig.RepoPath = localTmpDir
 
 	err := Clone()
-	if err == nil || err.Error() != "repo_url is empty" {
-		t.Errorf("expected error 'repo_url is empty', got %v", err)
+	if err == nil || err.Error() != "repoUrl is empty" {
+		t.Errorf("expected error 'repoUrl is empty', got %v", err)
 	}
+
 	config.GetConfig().GitConfig.RepoURL = origRepoURL
 }
 
 func TestClone_ExistingGitDir(t *testing.T) {
-	_, _, cleanup := setupTestRepo(t)
-	t.Cleanup(cleanup)
+	_, _ = setupTestRepo(t)
 
 	// First clone to create .git in localTmpDir
 	err := Clone()
@@ -157,8 +165,7 @@ func TestClone_ExistingGitDir(t *testing.T) {
 }
 
 func TestPull_NotAlreadyUpToDate(t *testing.T) {
-	remoteTmpDir, localTmpDir, cleanup := setupTestRepo(t)
-	t.Cleanup(cleanup)
+	remoteTmpDir, localTmpDir := setupTestRepo(t)
 
 	// Initial clone
 	err := Clone()
@@ -170,8 +177,9 @@ func TestPull_NotAlreadyUpToDate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open remote repo: %v", err)
 	}
+
 	file := filepath.Join(remoteTmpDir, "new.txt")
-	_ = os.WriteFile(file, []byte("new content"), 0600)
+	_ = os.WriteFile(file, []byte("new content"), 0o600)
 	w, _ := repo.Worktree()
 	_, _ = w.Add("new.txt")
 	_, _ = w.Commit("new commit", &git.CommitOptions{
@@ -190,7 +198,9 @@ func TestPull_NotAlreadyUpToDate(t *testing.T) {
 
 	// Check that the new file exists in the local repo
 	newFile := filepath.Join(localTmpDir, "new.txt")
-	if _, err := os.Stat(newFile); err != nil {
+
+	_, err = os.Stat(newFile)
+	if err != nil {
 		t.Errorf("expected new.txt to exist after pull, got error: %v", err)
 	}
 }

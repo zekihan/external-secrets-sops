@@ -2,23 +2,33 @@ package main
 
 import (
 	"fmt"
+	"net/http"
+	"os"
+	"time"
+
 	"github.com/justinas/alice"
-	log "github.com/sirupsen/logrus"
-	"github.com/zekihan/external-secrets-sops/config"
-	"github.com/zekihan/external-secrets-sops/git"
-	"github.com/zekihan/external-secrets-sops/routes/api"
 	"github.com/zekihan/go-commons/environment"
 	"github.com/zekihan/go-commons/middleware"
 	"github.com/zekihan/go-commons/utils"
 	"github.com/zekihan/go-commons/web/errorroutes"
 	"github.com/zekihan/go-commons/web/health"
 	"github.com/zekihan/go-commons/web/ping"
-	"net/http"
-	"os"
+
+	log "github.com/sirupsen/logrus"
+
+	"github.com/zekihan/external-secrets-sops/config"
+	"github.com/zekihan/external-secrets-sops/git"
+	"github.com/zekihan/external-secrets-sops/routes/api"
 )
 
-var stdChain alice.Chain
-var cfg *config.Config
+const (
+	defaultTimeout = 10 * time.Second
+)
+
+var (
+	stdChain alice.Chain
+	cfg      *config.Config
+)
 
 func init() {
 	err := environment.LoadEnvironmentFile()
@@ -27,10 +37,10 @@ func init() {
 		os.Exit(1)
 	}
 
-	// init config
+	// Init config.
 	cfg = config.GetConfig()
 
-	// init logger
+	// Init logger.
 	err = utils.InitLogger(&utils.LoggerConfig{
 		Path:          cfg.LogConfig.Path,
 		Level:         cfg.LogConfig.Level,
@@ -41,7 +51,7 @@ func init() {
 		os.Exit(1)
 	}
 
-	// init middleware
+	// Init middleware.
 	stdChain = alice.New(middleware.RecoverHandler, middleware.Logging)
 }
 
@@ -57,41 +67,51 @@ func main() {
 		}
 	}()
 
-	// API routes
+	// API routes.
 	http.HandleFunc("/api/ping", ping.GetPing)
 	http.HandleFunc("/api/health", health.GetHealth)
 	http.HandleFunc("/api/ready", api.GetReady)
 
-	// git routes
+	// Git routes.
 	http.HandleFunc("/git/lastCommit", api.GetCommit)
 	http.HandleFunc("/git/forceSync", api.ForceSync)
 
-	// Secret routes
+	// Secret routes.
 	http.HandleFunc("/secret/{project}/{config}/{environment}", api.GetAllSecret)
 	http.HandleFunc("/secret/{project}/{config}/{environment}/{key}", api.GetSecret)
 
-	// Error routes
+	// Error routes.
 	http.HandleFunc("/404", errorroutes.GetNotFound)
 	http.HandleFunc("/5xx", errorroutes.Get5xx)
 
-	// Redirect all other paths
+	// Redirect all other paths.
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		// Redirect root path to dashboard
+		// Redirect root path to dashboard.
 		if r.URL.Path == "/" {
 			http.Redirect(w, r, "/dashboard", http.StatusMovedPermanently)
+
 			return
 		}
-		// Redirect all other paths to 404
+		// Redirect all other paths to 404.
 		http.Redirect(w, r, "/404", http.StatusMovedPermanently)
 	})
 
 	port := cfg.WebConfig.Port
 	host := cfg.WebConfig.Host
 	log.Infof("Starting server on %s:%d", host, port)
-	err := http.ListenAndServe(fmt.Sprintf("%s:%d", host, port), stdChain.Then(http.DefaultServeMux))
+
+	srv := &http.Server{
+		Addr:         fmt.Sprintf("%s:%d", host, port),
+		Handler:      stdChain.Then(http.DefaultServeMux),
+		ReadTimeout:  defaultTimeout,
+		WriteTimeout: defaultTimeout,
+	}
+
+	err := srv.ListenAndServe()
 	if err != nil {
-		log.Fatal(err)
+		log.Errorf("Failed to start server: %v", err)
 	}
 
 	git.StopPullLoop()
+	os.Exit(1)
 }
