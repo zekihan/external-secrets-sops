@@ -7,5 +7,5 @@ git:
     repoPath: tmp/repo
     repoUrl: testdata
     accessToken: ""
-    poll_interval: 15m
+    pollInterval: 15m
     secretsPath: ./generated
