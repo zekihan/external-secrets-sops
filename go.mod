@@ -8,7 +8,7 @@ require (
 	github.com/justinas/alice v1.2.0
 	github.com/sethvargo/go-envconfig v1.3.0
 	github.com/sirupsen/logrus v1.9.3
-	github.com/zekihan/go-commons v0.1.5
+	github.com/zekihan/go-commons v0.1.6
 	gopkg.in/yaml.v3 v3.0.1
 )
 
