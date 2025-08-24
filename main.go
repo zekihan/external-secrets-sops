@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/justinas/alice"
@@ -35,6 +36,17 @@ func init() {
 	if err != nil {
 		log.Errorf("Error loading environment file: %v", err)
 		os.Exit(1)
+	}
+
+	sopsAgeKeyFile := os.Getenv("SOPS_AGE_KEY_FILE")
+	if sopsAgeKeyFile != "" {
+		sopsAgeKeyFile = strings.Replace(sopsAgeKeyFile, "~", os.Getenv("HOME"), 1)
+
+		err = os.Setenv("SOPS_AGE_KEY_FILE", sopsAgeKeyFile)
+		if err != nil {
+			log.Errorf("Error setting SOPS_AGE_KEY_FILE environment variable: %v", err)
+			os.Exit(1)
+		}
 	}
 
 	// Init config.
