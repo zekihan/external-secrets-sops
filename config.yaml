@@ -1,11 +1,18 @@
 web:
     host: 127.0.0.1
     port: 33000
+
 log:
     level: debug
+
 git:
     repoPath: tmp/repo
     repoUrl: testdata
     accessToken: ""
     pollInterval: 15m
     secretsPath: ./generated
+
+redis:
+  enabled: false
+  addrs:
+    - redis:6379

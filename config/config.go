@@ -25,9 +25,10 @@ const (
 var config *Config
 
 type Config struct {
-	GitConfig GitConfig `yaml:"git" env:", prefix=GIT_"`
-	LogConfig LogConfig `yaml:"log" env:", prefix=LOG_"`
-	WebConfig WebConfig `yaml:"web" env:", prefix=WEB_"`
+	GitConfig   *GitConfig   `yaml:"git"   env:", prefix=GIT_"`
+	LogConfig   *LogConfig   `yaml:"log"   env:", prefix=LOG_"`
+	WebConfig   *WebConfig   `yaml:"web"   env:", prefix=WEB_"`
+	RedisConfig *RedisConfig `yaml:"redis" env:", prefix=REDIS_"`
 }
 
 type WebConfig struct {
@@ -48,6 +49,18 @@ type GitConfig struct {
 	AccessToken  string        `yaml:"accessToken"  env:"ACCESS_TOKEN"`
 	SecretsPath  string        `yaml:"secretsPath"  env:"SECRETS_PATH"`
 	PullInterval time.Duration `yaml:"pullInterval" env:"PULL_INTERVAL"`
+}
+
+type RedisConfig struct {
+	Username         string   `yaml:"username"         env:"USERNAME"`
+	Password         string   `yaml:"password"         env:"PASSWORD"`
+	SentinelUsername string   `yaml:"sentinelUsername" env:"SENTINEL_USERNAME"`
+	SentinelPassword string   `yaml:"sentinelPassword" env:"SENTINEL_PASSWORD"`
+	MasterName       string   `yaml:"masterName"       env:"MASTER_NAME"`
+	Prefix           string   `yaml:"prefix"           env:"PREFIX"`
+	Addrs            []string `yaml:"addrs"            env:"ADDRS"`
+	DB               int      `yaml:"db"               env:"DB"`
+	Enabled          bool     `yaml:"enabled"          env:"ENABLED"`
 }
 
 func GetConfig() *Config {
@@ -135,20 +148,25 @@ func getConfigFilePath() string {
 
 func GetDefaultConfig() *Config {
 	return &Config{
-		WebConfig: WebConfig{
+		WebConfig: &WebConfig{
 			Host: "127.0.0.1",
 			Port: defaultPort,
 		},
-		LogConfig: LogConfig{
+		LogConfig: &LogConfig{
 			Level:         logrus.WarnLevel,
 			AddMethodName: false,
 		},
-		GitConfig: GitConfig{
+		GitConfig: &GitConfig{
 			RepoPath:     "./tmp/repo",
 			RepoURL:      "",
 			AccessToken:  "",
 			PullInterval: defaultPullInterval,
 			SecretsPath:  "./",
+		},
+		RedisConfig: &RedisConfig{
+			Addrs:  make([]string, 0),
+			DB:     0,
+			Prefix: "ess",
 		},
 	}
 }
