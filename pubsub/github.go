@@ -12,11 +12,16 @@ import (
 const githubEventsChannel = "github-events"
 
 func PublishGithubEvent(ctx context.Context, message string) error {
-	return publish(ctx, githubEventsChannel, message)
+	err := getPubSuber().Publish(ctx, githubEventsChannel, message)
+	if err != nil {
+		return fmt.Errorf("error publishing GitHub event: %w", err)
+	}
+
+	return nil
 }
 
 func ListenGithubEvents() context.CancelFunc {
-	return listen(githubEventsChannel, func(ctx context.Context, payload string) error {
+	return getPubSuber().Listen(githubEventsChannel, func(ctx context.Context, payload string) error {
 		log.Infof("Received GitHub event: %s", payload)
 
 		err := git.Pull(ctx)
