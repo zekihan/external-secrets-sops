@@ -76,12 +76,8 @@ func main() {
 	log.Info("Starting external secrets sops server")
 	log.Info(utils.GetStartupInfo())
 
-	if config.GetConfig().RedisConfig.Enabled {
-		cancelListenGithubEvents := pubsub.ListenGithubEvents()
-		defer cancelListenGithubEvents()
-	} else {
-		log.Warn("Redis pub/sub is disabled")
-	}
+	cancelListenGithubEvents := pubsub.ListenGithubEvents()
+	defer cancelListenGithubEvents()
 
 	if cfg.GitConfig.RepoURL != "" {
 		cancelGitPullLoop := git.StartPullLoop()
