@@ -31,7 +31,7 @@ func TestForceSync_Success(t *testing.T) {
 
 	got := buf.String()
 
-	expected := "Synced\n"
+	expected := "Sync event published successfully\n"
 	if got != expected {
 		t.Errorf("expected body %q, got %q", expected, got)
 	}

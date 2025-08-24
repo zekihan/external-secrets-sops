@@ -1,11 +1,11 @@
 package git
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
 	"path"
-	"sync/atomic"
 	"time"
 
 	"github.com/go-git/go-git/v5"
@@ -18,16 +18,12 @@ import (
 	"github.com/zekihan/external-secrets-sops/config"
 )
 
-var (
-	quit            = make(chan bool)
-	loopRunning     = atomic.Bool{}
-	errRepoURLEmpty = errors.New("repoUrl is empty")
-)
+var errRepoURLEmpty = errors.New("repoUrl is empty")
 
-func Clone() error {
-	repoPath := config.GetConfig().GitConfig.RepoPath
+func Clone(ctx context.Context) error {
+	repoPath := config.GetConfigWithContext(ctx).GitConfig.RepoPath
 
-	repoURL := config.GetConfig().GitConfig.RepoURL
+	repoURL := config.GetConfigWithContext(ctx).GitConfig.RepoURL
 	if repoURL == "" {
 		return errRepoURLEmpty
 	}
@@ -37,7 +33,7 @@ func Clone() error {
 		return cloneCheckIfExists(repoURL, repoPath)
 	}
 
-	return cloneIfNotExists(repoURL, repoPath)
+	return cloneIfNotExists(ctx, repoURL, repoPath)
 }
 
 func cloneCheckIfExists(repoURL, repoPath string) error {
@@ -64,15 +60,15 @@ func cloneCheckIfExists(repoURL, repoPath string) error {
 	return nil
 }
 
-func cloneIfNotExists(repoURL, repoPath string) error {
+func cloneIfNotExists(ctx context.Context, repoURL, repoPath string) error {
 	cloneOptions := &git.CloneOptions{
 		URL:      repoURL,
 		Progress: log.StandardLogger().Writer(),
 	}
-	if config.GetConfig().GitConfig.AccessToken != "" {
+	if config.GetConfigWithContext(ctx).GitConfig.AccessToken != "" {
 		cloneOptions.Auth = &http.BasicAuth{
 			Username: "X", // anything except an empty string
-			Password: config.GetConfig().GitConfig.AccessToken,
+			Password: config.GetConfigWithContext(ctx).GitConfig.AccessToken,
 		}
 	}
 
@@ -84,12 +80,12 @@ func cloneIfNotExists(repoURL, repoPath string) error {
 	return nil
 }
 
-func Pull() error {
-	repoPath := config.GetConfig().GitConfig.RepoPath
+func Pull(ctx context.Context) error {
+	repoPath := config.GetConfigWithContext(ctx).GitConfig.RepoPath
 
 	_, err := os.Stat(path.Join(repoPath, ".git"))
 	if os.IsNotExist(err) {
-		cloneErr := Clone()
+		cloneErr := Clone(ctx)
 		if cloneErr != nil {
 			return fmt.Errorf("git clone failed: %w", cloneErr)
 		}
@@ -106,17 +102,17 @@ func Pull() error {
 	}
 
 	fetchOptions := &git.FetchOptions{}
-	if config.GetConfig().GitConfig.AccessToken != "" {
+	if config.GetConfigWithContext(ctx).GitConfig.AccessToken != "" {
 		fetchOptions.Auth = &http.BasicAuth{
 			Username: "X", // anything except an empty string
-			Password: config.GetConfig().GitConfig.AccessToken,
+			Password: config.GetConfigWithContext(ctx).GitConfig.AccessToken,
 		}
 	}
 
 	err = remote.Fetch(fetchOptions)
 	if err != nil {
 		if errors.Is(err, git.NoErrAlreadyUpToDate) {
-			commit, commitErr := GetLastCommit()
+			commit, commitErr := GetLastCommit(ctx)
 			if commitErr != nil {
 				return nil //nolint:nilerr // ignore error if we can't get the last commit
 			}
@@ -169,8 +165,8 @@ func isDirExists(dirPath string) bool {
 	return !os.IsNotExist(err)
 }
 
-func GetLastCommit() (*object.Commit, error) {
-	repoPath := config.GetConfig().GitConfig.RepoPath
+func GetLastCommit(ctx context.Context) (*object.Commit, error) {
+	repoPath := config.GetConfigWithContext(ctx).GitConfig.RepoPath
 
 	repo, err := git.PlainOpen(repoPath)
 	if err != nil {
@@ -190,12 +186,10 @@ func GetLastCommit() (*object.Commit, error) {
 	return commit, nil
 }
 
-func StartPullLoop() {
-	if !loopRunning.CompareAndSwap(false, true) {
-		return // Already running
-	}
+func StartPullLoop() context.CancelFunc {
+	ctx, cancel := context.WithCancel(context.Background())
 
-	err := Pull()
+	err := Pull(ctx)
 	if err != nil {
 		log.Error(err)
 	}
@@ -206,22 +200,17 @@ func StartPullLoop() {
 		for {
 			select {
 			case <-ticker.C:
-				err := Pull()
+				err := Pull(ctx)
 				if err != nil {
 					log.Error(err)
 				}
-			case <-quit:
-				loopRunning.Store(false)
+			case <-ctx.Done():
 				ticker.Stop()
 
 				return
 			}
 		}
 	}()
-}
 
-func StopPullLoop() {
-	quit <- true
-
-	close(quit)
+	return cancel
 }

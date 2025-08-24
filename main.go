@@ -1,9 +1,10 @@
 package main
 
 import (
-	"fmt"
+	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 
 	"github.com/zekihan/external-secrets-sops/config"
 	"github.com/zekihan/external-secrets-sops/git"
+	"github.com/zekihan/external-secrets-sops/pubsub"
 	"github.com/zekihan/external-secrets-sops/routes/api"
 )
 
@@ -27,8 +29,8 @@ const (
 )
 
 var (
-	stdChain alice.Chain
-	cfg      *config.Config
+	stdChain, authChain alice.Chain
+	cfg                 *config.Config
 )
 
 func init() {
@@ -65,32 +67,45 @@ func init() {
 
 	// Init middleware.
 	stdChain = alice.New(middleware.RecoverHandler, middleware.Logging)
+	authChain = alice.New(
+		middleware.GetAuthMiddlewareForSingleAPIKey(config.GetConfig().WebConfig.APIKey),
+	)
 }
 
 func main() {
 	log.Info("Starting external secrets sops server")
 	log.Info(utils.GetStartupInfo())
 
-	go func() {
-		if cfg.GitConfig.RepoURL != "" {
-			git.StartPullLoop()
-		} else {
-			log.Warn("Git repository URL is not configured, skipping git pulling")
-		}
-	}()
+	if config.GetConfig().RedisConfig.Enabled {
+		cancelListenGithubEvents := pubsub.ListenGithubEvents()
+		defer cancelListenGithubEvents()
+	} else {
+		log.Warn("Redis pub/sub is disabled")
+	}
 
+	if cfg.GitConfig.RepoURL != "" {
+		cancelGitPullLoop := git.StartPullLoop()
+		defer cancelGitPullLoop()
+	} else {
+		log.Warn("Git repository URL is not configured, skipping git pulling")
+	}
+
+	runWebServer()
+}
+
+func runWebServer() {
 	// API routes.
 	http.HandleFunc("/api/ping", ping.GetPing)
 	http.HandleFunc("/api/health", health.GetHealth)
 	http.HandleFunc("/api/ready", api.GetReady)
 
 	// Git routes.
-	http.HandleFunc("/git/lastCommit", api.GetCommit)
-	http.HandleFunc("/git/forceSync", api.ForceSync)
+	http.Handle("/git/lastCommit", authChain.ThenFunc(api.GetCommit))
+	http.Handle("/git/forceSync", authChain.ThenFunc(api.ForceSync))
 
 	// Secret routes.
-	http.HandleFunc("/secret/{project}/{config}/{environment}", api.GetAllSecret)
-	http.HandleFunc("/secret/{project}/{config}/{environment}/{key}", api.GetSecret)
+	http.Handle("/secret/{project}/{config}/{environment}", authChain.ThenFunc(api.GetAllSecret))
+	http.Handle("/secret/{project}/{config}/{environment}/{key}", authChain.ThenFunc(api.GetSecret))
 
 	// Error routes.
 	http.HandleFunc("/404", errorroutes.GetNotFound)
@@ -98,22 +113,17 @@ func main() {
 
 	// Redirect all other paths.
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		// Redirect root path to dashboard.
-		if r.URL.Path == "/" {
-			http.Redirect(w, r, "/dashboard", http.StatusMovedPermanently)
-
-			return
-		}
 		// Redirect all other paths to 404.
 		http.Redirect(w, r, "/404", http.StatusMovedPermanently)
 	})
 
-	port := cfg.WebConfig.Port
-	host := cfg.WebConfig.Host
-	log.Infof("Starting server on %s:%d", host, port)
+	port := config.GetConfig().WebConfig.Port
+	host := config.GetConfig().WebConfig.Host
+	addr := net.JoinHostPort(host, strconv.Itoa(port))
+	log.Infof("Starting server on http://%s", addr)
 
 	srv := &http.Server{
-		Addr:         fmt.Sprintf("%s:%d", host, port),
+		Addr:         addr,
 		Handler:      stdChain.Then(http.DefaultServeMux),
 		ReadTimeout:  defaultTimeout,
 		WriteTimeout: defaultTimeout,
@@ -122,8 +132,6 @@ func main() {
 	err := srv.ListenAndServe()
 	if err != nil {
 		log.Errorf("Failed to start server: %v", err)
+		os.Exit(1)
 	}
-
-	git.StopPullLoop()
-	os.Exit(1)
 }

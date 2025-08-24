@@ -32,8 +32,9 @@ type Config struct {
 }
 
 type WebConfig struct {
-	Host string `yaml:"host" env:"HOST"`
-	Port int    `yaml:"port" env:"PORT"`
+	Host   string `yaml:"host"   env:"HOST"`
+	APIKey string `yaml:"apiKey" env:"API_KEY"`
+	Port   int    `yaml:"port"   env:"PORT"`
 }
 
 type LogConfig struct {
@@ -64,10 +65,12 @@ type RedisConfig struct {
 }
 
 func GetConfig() *Config {
+	return GetConfigWithContext(context.Background())
+}
+
+func GetConfigWithContext(ctx context.Context) *Config {
 	if config == nil {
 		cfg := GetConfigFromFile()
-
-		ctx := context.Background()
 
 		err := envconfig.ProcessWith(ctx, &envconfig.Config{
 			Target:           cfg,

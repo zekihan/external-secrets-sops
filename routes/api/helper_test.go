@@ -54,7 +54,7 @@ func setupTestRepo(t *testing.T) string {
 	config.GetConfig().GitConfig.AccessToken = ""
 	config.GetConfig().GitConfig.PullInterval = time.Second
 
-	_ = gitLocal.Clone()
+	_ = gitLocal.Clone(t.Context())
 
 	cleanup := func() {
 		err := os.RemoveAll(remoteTmpDir)

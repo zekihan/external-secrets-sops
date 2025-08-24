@@ -78,7 +78,7 @@ func TestIsDirExists(t *testing.T) {
 func TestIsRepoReady(t *testing.T) {
 	_, _ = setupTestRepo(t)
 
-	err := Clone()
+	err := Clone(t.Context())
 	if err != nil {
 		t.Fatalf("clone failed: %v", err)
 	}
@@ -91,12 +91,12 @@ func TestIsRepoReady(t *testing.T) {
 func TestGetLastCommit(t *testing.T) {
 	_, _ = setupTestRepo(t)
 
-	err := Clone()
+	err := Clone(t.Context())
 	if err != nil {
 		t.Fatalf("clone failed: %v", err)
 	}
 
-	commit, err := GetLastCommit()
+	commit, err := GetLastCommit(t.Context())
 	if err != nil {
 		t.Fatalf("GetLastCommit failed: %v", err)
 	}
@@ -109,7 +109,7 @@ func TestGetLastCommit(t *testing.T) {
 func TestCloneAndPull(t *testing.T) {
 	_, _ = setupTestRepo(t)
 
-	err := Clone()
+	err := Clone(t.Context())
 	if err != nil {
 		t.Fatalf("clone failed: %v", err)
 	}
@@ -118,7 +118,7 @@ func TestCloneAndPull(t *testing.T) {
 		t.Errorf("repo should be ready after clone")
 	}
 
-	err = Pull()
+	err = Pull(t.Context())
 	if err != nil {
 		t.Fatalf("Pull failed: %v", err)
 	}
@@ -127,10 +127,10 @@ func TestCloneAndPull(t *testing.T) {
 func TestStartAndStopPullLoop(t *testing.T) {
 	_, _ = setupTestRepo(t)
 
-	go StartPullLoop()
+	cancel := StartPullLoop()
 
 	time.Sleep(2 * time.Second) //nolint:forbidigo // not production code, just for testing
-	StopPullLoop()
+	cancel()
 }
 
 func TestClone_EmptyRepoURL(t *testing.T) {
@@ -140,7 +140,7 @@ func TestClone_EmptyRepoURL(t *testing.T) {
 	config.GetConfig().GitConfig.RepoURL = ""
 	config.GetConfig().GitConfig.RepoPath = localTmpDir
 
-	err := Clone()
+	err := Clone(t.Context())
 	if err == nil || err.Error() != "repoUrl is empty" {
 		t.Errorf("expected error 'repoUrl is empty', got %v", err)
 	}
@@ -152,13 +152,13 @@ func TestClone_ExistingGitDir(t *testing.T) {
 	_, _ = setupTestRepo(t)
 
 	// First clone to create .git in localTmpDir
-	err := Clone()
+	err := Clone(t.Context())
 	if err != nil {
 		t.Fatalf("initial clone failed: %v", err)
 	}
 
 	// Now, .git exists. Clone again should be a no-op (no error, no re-clone)
-	err = Clone()
+	err = Clone(t.Context())
 	if err != nil {
 		t.Errorf("expected no error when .git exists and remote matches, got %v", err)
 	}
@@ -168,7 +168,7 @@ func TestPull_NotAlreadyUpToDate(t *testing.T) {
 	remoteTmpDir, localTmpDir := setupTestRepo(t)
 
 	// Initial clone
-	err := Clone()
+	err := Clone(t.Context())
 	if err != nil {
 		t.Fatalf("clone failed: %v", err)
 	}
@@ -191,7 +191,7 @@ func TestPull_NotAlreadyUpToDate(t *testing.T) {
 	})
 
 	// Pull should fetch the new commit
-	err = Pull()
+	err = Pull(t.Context())
 	if err != nil {
 		t.Fatalf("Pull failed: %v", err)
 	}
