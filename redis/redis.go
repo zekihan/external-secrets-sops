@@ -1,10 +1,13 @@
 package redis
 
 import (
+	"context"
 	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/zekihan/external-secrets-sops/config"
 )
@@ -17,6 +20,7 @@ var (
 	defaultMaxRetries      = 3                      // Default maximum number of retries for Redis commands
 	defaultMinRetryBackoff = 8 * time.Millisecond   // Default minimum retry backoff
 	defaultMaxRetryBackoff = 512 * time.Millisecond // Default maximum retry backoff
+	defaultTimeout         = 5 * time.Second        // Default timeout for Redis operations
 )
 
 func resetRedisClient() {
@@ -51,6 +55,20 @@ func GetRedisClient() redis.UniversalClient {
 			MinRetryBackoff:  defaultMinRetryBackoff,
 			MaxRetryBackoff:  defaultMaxRetryBackoff,
 		})
+
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+		defer cancel()
+
+		res, err := redisClient.Ping(ctx).Result()
+		if err != nil {
+			panic("failed to connect to Redis: " + err.Error())
+		}
+
+		if res != "PONG" {
+			panic("failed to connect to Redis: unexpected response " + res)
+		}
+
+		log.Debug("Connected to Redis successfully")
 	})
 
 	return redisClient

@@ -7,12 +7,13 @@ log:
 
 git:
   repoPath: tmp/repo
-  repoUrl: testdata
+  repoUrl: https://github.com/example/secrets.git
   accessToken: ""
   pollInterval: 15m
   secretsPath: ./generated
 
 redis:
-  enabled: false
+  enabled: true
   addrs:
-    - redis:6379
+    - localhost:6379
+  db: 14
