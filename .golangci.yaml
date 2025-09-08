@@ -191,8 +191,8 @@ linters:
         - w http.ResponseWriter
         - r *Reader
         - w *Writer
-        - w *bufio.Writer
         - r *bufio.Reader
+        - w *bufio.Writer
     importas:
       no-unaliased: true
       alias:
