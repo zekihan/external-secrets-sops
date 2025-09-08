@@ -46,6 +46,10 @@ func StartMockRedisServer(t *testing.T, addr string) error {
 		for {
 			conn, err := ln.Accept()
 			if err != nil {
+				if errors.Is(err, net.ErrClosed) {
+					return
+				}
+
 				log.Infof("accept error: %v", err)
 
 				continue
