@@ -1,14 +1,22 @@
 package redis
 
 import (
+	"strconv"
 	"testing"
+	"time"
 
 	"github.com/zekihan/external-secrets-sops/config"
 )
 
 func TestGetRedisClient_Enabled(t *testing.T) {
+	redisAddr := "localhost:" + strconv.Itoa(21331)
+	go StartMockRedisServer(t, redisAddr)
+	// Give the server a moment to start
+	time.Sleep(100 * time.Millisecond) //nolint:forbidigo // only in tests
+
 	cfg := config.GetConfig()
 	cfg.RedisConfig.Enabled = true
+	cfg.RedisConfig.Addrs = []string{redisAddr}
 
 	resetRedisClient()
 
