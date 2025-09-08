@@ -16,7 +16,7 @@ import (
 
 const defaultListenAddr = "localhost:6379"
 
-func StartMockRedisServer(t *testing.T, addr string) {
+func StartMockRedisServer(t *testing.T, addr string) error {
 	t.Helper()
 
 	listenAddr := addr
@@ -30,7 +30,7 @@ func StartMockRedisServer(t *testing.T, addr string) {
 	if err != nil {
 		log.Errorf("listen error: %v", err)
 
-		return
+		return err
 	}
 
 	t.Cleanup(func() {
@@ -42,16 +42,20 @@ func StartMockRedisServer(t *testing.T, addr string) {
 
 	log.Infof("mock redis listening on %s\n", listenAddr)
 
-	for {
-		conn, err := ln.Accept()
-		if err != nil {
-			log.Infof("accept error: %v", err)
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				log.Infof("accept error: %v", err)
 
-			continue
+				continue
+			}
+
+			go handleConn(t, conn)
 		}
+	}()
 
-		go handleConn(t, conn)
-	}
+	return nil
 }
 
 func handleConn(t *testing.T, conn net.Conn) {
