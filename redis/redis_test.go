@@ -9,6 +9,7 @@ import (
 
 func TestGetRedisClient_Enabled(t *testing.T) {
 	redisAddr := "localhost:" + strconv.Itoa(21331)
+
 	err := StartMockRedisServer(t, redisAddr)
 	if err != nil {
 		t.Fatalf("failed to start mock redis server: %v", err)

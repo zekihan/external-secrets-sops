@@ -30,7 +30,7 @@ func StartMockRedisServer(t *testing.T, addr string) error {
 	if err != nil {
 		log.Errorf("listen error: %v", err)
 
-		return err
+		return fmt.Errorf("failed to start mock redis server: %w", err)
 	}
 
 	t.Cleanup(func() {
