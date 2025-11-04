@@ -2,6 +2,7 @@ package secret
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path"
 
@@ -30,9 +31,7 @@ func GetAllSecretsComputed(project, configName, environment string) (map[string]
 			return nil, err
 		}
 
-		for key, value := range baseValues {
-			values[key] = value
-		}
+		maps.Copy(values, baseValues)
 	}
 
 	confValues, err := GetAllSecrets(project, configName, environment)
@@ -40,9 +39,7 @@ func GetAllSecretsComputed(project, configName, environment string) (map[string]
 		return nil, err
 	}
 
-	for key, value := range confValues {
-		values[key] = value
-	}
+	maps.Copy(values, confValues)
 
 	return values, nil
 }

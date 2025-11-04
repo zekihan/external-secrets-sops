@@ -50,6 +50,7 @@ func TestGetConfigFilePath_CONFIG_DIR(t *testing.T) {
 func TestGetConfigFilePath_Default(t *testing.T) {
 	os.Unsetenv("CONFIG_PATH")
 	os.Unsetenv("CONFIG_DIR")
+
 	cwd, _ := os.Getwd()
 	expected := filepath.Join(cwd, "config.yaml")
 
