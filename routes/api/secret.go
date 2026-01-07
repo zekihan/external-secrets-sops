@@ -2,11 +2,10 @@ package api
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 
 	"github.com/zekihan/go-commons/web"
-
-	log "github.com/sirupsen/logrus"
 
 	"github.com/zekihan/external-secrets-sops/secret"
 )
@@ -16,16 +15,12 @@ func GetSecret(w http.ResponseWriter, r *http.Request) {
 	config := r.PathValue("config")
 	environment := r.PathValue("environment")
 	key := r.PathValue("key")
-	log.Debug(
-		"Endpoint: getSecret ",
-		"project: ",
-		project,
-		" config: ",
-		config,
-		" environment: ",
-		environment,
-		" key: ",
-		key,
+	slog.DebugContext(r.Context(),
+		"Request received for GetSecret",
+		slog.String("project", project),
+		slog.String("config", config),
+		slog.String("environment", environment),
+		slog.String("key", key),
 	)
 
 	getSecret, err := secret.GetSecret(project, config, environment, key)
@@ -47,14 +42,11 @@ func GetAllSecret(w http.ResponseWriter, r *http.Request) {
 	project := r.PathValue("project")
 	config := r.PathValue("config")
 	environment := r.PathValue("environment")
-	log.Debug(
-		"Endpoint: getAllSecret ",
-		"project: ",
-		project,
-		" config: ",
-		config,
-		" environment: ",
-		environment,
+	slog.DebugContext(r.Context(),
+		"Request received for GetAllSecret",
+		slog.String("project", project),
+		slog.String("config", config),
+		slog.String("environment", environment),
 	)
 
 	secrets, err := secret.GetAllSecretsComputed(project, config, environment)

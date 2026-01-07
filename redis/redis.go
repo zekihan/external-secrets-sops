@@ -2,12 +2,11 @@ package redis
 
 import (
 	"context"
+	"log/slog"
 	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
-
-	log "github.com/sirupsen/logrus"
 
 	"github.com/zekihan/external-secrets-sops/config"
 )
@@ -68,7 +67,7 @@ func GetRedisClient() redis.UniversalClient {
 			panic("failed to connect to Redis: unexpected response " + res)
 		}
 
-		log.Debug("Connected to Redis successfully")
+		slog.DebugContext(ctx, "Connected to Redis", slog.Any("addrs", redisCfg.Addrs))
 	})
 
 	return redisClient

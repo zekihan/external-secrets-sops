@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -15,8 +17,6 @@ import (
 	"github.com/zekihan/go-commons/web/errorroutes"
 	"github.com/zekihan/go-commons/web/health"
 	"github.com/zekihan/go-commons/web/ping"
-
-	log "github.com/sirupsen/logrus"
 
 	"github.com/zekihan/external-secrets-sops/config"
 	"github.com/zekihan/external-secrets-sops/git"
@@ -36,7 +36,11 @@ var (
 func init() {
 	err := environment.LoadEnvironmentFile()
 	if err != nil {
-		log.Errorf("Error loading environment file: %v", err)
+		slog.ErrorContext(
+			context.Background(),
+			"Failed to load environment file",
+			slog.Any("error", err),
+		)
 		os.Exit(1)
 	}
 
@@ -46,7 +50,11 @@ func init() {
 
 		err = os.Setenv("SOPS_AGE_KEY_FILE", sopsAgeKeyFile)
 		if err != nil {
-			log.Errorf("Error setting SOPS_AGE_KEY_FILE environment variable: %v", err)
+			slog.ErrorContext(
+				context.Background(),
+				"Error setting SOPS_AGE_KEY_FILE environment variable",
+				slog.Any("error", err),
+			)
 			os.Exit(1)
 		}
 	}
@@ -55,15 +63,10 @@ func init() {
 	cfg = config.GetConfig()
 
 	// Init logger.
-	err = utils.InitLogger(&utils.LoggerConfig{
-		Path:          cfg.LogConfig.Path,
-		Level:         cfg.LogConfig.Level,
-		AddMethodName: cfg.LogConfig.AddMethodName,
+	utils.InitLogger(&utils.LoggerConfig{
+		Level:     cfg.LogConfig.Level,
+		AddSource: cfg.LogConfig.AddSource,
 	})
-	if err != nil {
-		log.Errorf("Error initializing logger: %v", err)
-		os.Exit(1)
-	}
 
 	// Init middleware.
 	stdChain = alice.New(middleware.RecoverHandler, middleware.Logging)
@@ -73,8 +76,8 @@ func init() {
 }
 
 func main() {
-	log.Info("Starting external secrets sops server")
-	log.Info(utils.GetStartupInfo())
+	slog.InfoContext(context.Background(), "Starting external secrets sops server")
+	utils.LogVersionInfo(context.Background())
 
 	cancelListenGithubEvents := pubsub.ListenGithubEvents()
 	defer cancelListenGithubEvents()
@@ -83,7 +86,7 @@ func main() {
 		cancelGitPullLoop := git.StartPullLoop()
 		defer cancelGitPullLoop()
 	} else {
-		log.Warn("Git repository URL is not configured, skipping git pulling")
+		slog.WarnContext(context.Background(), "Git repository URL is not configured, skipping git pulling")
 	}
 
 	runWebServer()
@@ -116,7 +119,7 @@ func runWebServer() {
 	port := config.GetConfig().WebConfig.Port
 	host := config.GetConfig().WebConfig.Host
 	addr := net.JoinHostPort(host, strconv.Itoa(port))
-	log.Infof("Starting server on http://%s", addr)
+	slog.InfoContext(context.Background(), "Starting server on http://"+addr)
 
 	srv := &http.Server{
 		Addr:         addr,
@@ -127,7 +130,7 @@ func runWebServer() {
 
 	err := srv.ListenAndServe()
 	if err != nil {
-		log.Errorf("Failed to start server: %v", err)
+		slog.ErrorContext(context.Background(), "Error starting server", slog.Any("error", err))
 		os.Exit(1)
 	}
 }

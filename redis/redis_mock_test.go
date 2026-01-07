@@ -6,12 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"strconv"
 	"strings"
 	"testing"
-
-	log "github.com/sirupsen/logrus"
 )
 
 const defaultListenAddr = "localhost:6379"
@@ -28,19 +27,23 @@ func StartMockRedisServer(t *testing.T, addr string) error {
 
 	ln, err := listenConfig.Listen(t.Context(), "tcp", listenAddr)
 	if err != nil {
-		log.Errorf("listen error: %v", err)
+		slog.ErrorContext(t.Context(), "Failed to start mock redis server", slog.Any("error", err))
 
-		return fmt.Errorf("failed to start mock redis server: %w", err)
+		return fmt.Errorf("Failed to start mock redis server: %w", err)
 	}
 
 	t.Cleanup(func() {
 		err := ln.Close()
 		if err != nil {
-			log.Infof("error closing listener: %v", err)
+			slog.ErrorContext(
+				t.Context(),
+				"Failed to close mock redis server",
+				slog.Any("error", err),
+			)
 		}
 	})
 
-	log.Infof("mock redis listening on %s\n", listenAddr)
+	slog.InfoContext(t.Context(), "Mock redis server started", slog.String("address", listenAddr))
 
 	go func() {
 		for {
@@ -50,7 +53,11 @@ func StartMockRedisServer(t *testing.T, addr string) error {
 					return
 				}
 
-				log.Infof("accept error: %v", err)
+				slog.ErrorContext(
+					t.Context(),
+					"Failed to accept connection",
+					slog.Any("error", err),
+				)
 
 				continue
 			}
@@ -77,7 +84,7 @@ func handleConn(t *testing.T, conn net.Conn) {
 				return
 			}
 
-			log.Infof("read error: %v", err)
+			slog.ErrorContext(t.Context(), "Read command error", slog.Any("error", err))
 
 			return
 		}
@@ -96,7 +103,7 @@ func handleConn(t *testing.T, conn net.Conn) {
 
 			err = w.Flush()
 			if err != nil {
-				log.Infof("flush error: %v", err)
+				slog.InfoContext(t.Context(), "Failed to flush", slog.Any("error", err))
 			}
 
 			return
@@ -107,7 +114,7 @@ func handleConn(t *testing.T, conn net.Conn) {
 
 		err = w.Flush()
 		if err != nil {
-			log.Infof("flush error: %v", err)
+			slog.InfoContext(t.Context(), "Failed to flush", slog.Any("error", err))
 		}
 	}
 }
@@ -211,21 +218,21 @@ func writeSimpleString(t *testing.T, w *bufio.Writer, str string) {
 
 	_, err := w.WriteString("+")
 	if err != nil {
-		log.Infof("write error: %v", err)
+		slog.ErrorContext(t.Context(), "Failed to write command", slog.Any("error", err))
 
 		return
 	}
 
 	_, err = w.WriteString(str)
 	if err != nil {
-		log.Infof("write error: %v", err)
+		slog.ErrorContext(t.Context(), "Failed to write command", slog.Any("error", err))
 
 		return
 	}
 
 	_, err = w.WriteString("\r\n")
 	if err != nil {
-		log.Infof("write error: %v", err)
+		slog.ErrorContext(t.Context(), "Failed to write command", slog.Any("error", err))
 
 		return
 	}
@@ -236,21 +243,21 @@ func writeError(t *testing.T, w *bufio.Writer, msg string) {
 
 	_, err := w.WriteString("-")
 	if err != nil {
-		log.Infof("write error: %v", err)
+		slog.ErrorContext(t.Context(), "Failed to write command", slog.Any("error", err))
 
 		return
 	}
 
 	_, err = w.WriteString(msg)
 	if err != nil {
-		log.Infof("write error: %v", err)
+		slog.ErrorContext(t.Context(), "Failed to write command", slog.Any("error", err))
 
 		return
 	}
 
 	_, err = w.WriteString("\r\n")
 	if err != nil {
-		log.Infof("write error: %v", err)
+		slog.ErrorContext(t.Context(), "Failed to write command", slog.Any("error", err))
 
 		return
 	}

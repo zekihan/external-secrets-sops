@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path"
 	"time"
@@ -12,8 +13,6 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
-
-	log "github.com/sirupsen/logrus"
 
 	"github.com/zekihan/external-secrets-sops/config"
 )
@@ -63,7 +62,7 @@ func cloneCheckIfExists(repoURL, repoPath string) error {
 func cloneIfNotExists(ctx context.Context, repoURL, repoPath string) error {
 	cloneOptions := &git.CloneOptions{
 		URL:      repoURL,
-		Progress: log.StandardLogger().Writer(),
+		Progress: os.Stdout,
 	}
 	if config.GetConfigWithContext(ctx).GitConfig.AccessToken != "" {
 		cloneOptions.Auth = &http.BasicAuth{
@@ -117,7 +116,11 @@ func Pull(ctx context.Context) error {
 				return nil //nolint:nilerr // ignore error if we can't get the last commit
 			}
 
-			log.Info("already up to date. last commit: ", commit.String())
+			slog.InfoContext(
+				ctx,
+				"Repository already up-to-date",
+				slog.String("commit", commit.String()),
+			)
 
 			return nil
 		}
@@ -148,7 +151,7 @@ func Pull(ctx context.Context) error {
 		return fmt.Errorf("failed to get commit object: %w", err)
 	}
 
-	log.Info("new commit: ", commit.String())
+	slog.InfoContext(ctx, "Repository updated", slog.String("commit", commit.String()))
 
 	return nil
 }
@@ -191,7 +194,7 @@ func StartPullLoop() context.CancelFunc {
 
 	err := Pull(ctx)
 	if err != nil {
-		log.Error(err)
+		slog.ErrorContext(ctx, "Initial git pull failed", slog.Any("error", err))
 	}
 
 	ticker := time.NewTicker(config.GetConfig().GitConfig.PullInterval)
@@ -202,7 +205,7 @@ func StartPullLoop() context.CancelFunc {
 			case <-ticker.C:
 				err := Pull(ctx)
 				if err != nil {
-					log.Error(err)
+					slog.ErrorContext(ctx, "Git pull failed", slog.Any("error", err))
 				}
 			case <-ctx.Done():
 				ticker.Stop()

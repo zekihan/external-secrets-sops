@@ -1,6 +1,7 @@
 package config
 
 import (
+	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
@@ -17,7 +18,7 @@ func TestGetDefaultConfig(t *testing.T) {
 		t.Errorf("expected default port 8080, got %d", cfg.WebConfig.Port)
 	}
 
-	if cfg.LogConfig.Level != 3 { // logrus.WarnLevel == 3
+	if cfg.LogConfig.Level != slog.LevelWarn {
 		t.Errorf("expected default log level 2, got %d", cfg.LogConfig.Level)
 	}
 
@@ -29,7 +30,7 @@ func TestGetDefaultConfig(t *testing.T) {
 func TestGetConfigFilePath_CONFIG_PATH(t *testing.T) {
 	t.Setenv("CONFIG_PATH", "/tmp/test_config.yaml")
 
-	got := getConfigFilePath()
+	got := getConfigFilePath(t.Context())
 	if got != "/tmp/test_config.yaml" {
 		t.Errorf("expected /tmp/test_config.yaml, got %s", got)
 	}
@@ -41,7 +42,7 @@ func TestGetConfigFilePath_CONFIG_DIR(t *testing.T) {
 
 	expected := filepath.Join(tmpDir, "config.yaml")
 
-	got := getConfigFilePath()
+	got := getConfigFilePath(t.Context())
 	if got != expected {
 		t.Errorf("expected %s, got %s", expected, got)
 	}
@@ -54,7 +55,7 @@ func TestGetConfigFilePath_Default(t *testing.T) {
 	cwd, _ := os.Getwd()
 	expected := filepath.Join(cwd, "config.yaml")
 
-	got := getConfigFilePath()
+	got := getConfigFilePath(t.Context())
 	if got != expected {
 		t.Errorf("expected %s, got %s", expected, got)
 	}
@@ -70,7 +71,7 @@ web:
   port: 9090
 log:
   level: "info"
-  addMethodName: true
+  addSource: true
   path: "/tmp/log"
 git:
   repoPath: "/tmp/repo"
@@ -87,7 +88,7 @@ git:
 
 	t.Setenv("CONFIG_PATH", cfgFile)
 
-	cfg := GetConfigFromFile()
+	cfg := GetConfigFromFile(t.Context())
 	if cfg.WebConfig.Host != "0.0.0.0" {
 		t.Errorf("expected host 0.0.0.0, got %s", cfg.WebConfig.Host)
 	}
@@ -100,8 +101,8 @@ git:
 		t.Errorf("expected log level info, got %s", cfg.LogConfig.LevelStr)
 	}
 
-	if !cfg.LogConfig.AddMethodName {
-		t.Errorf("expected add_method_name true")
+	if !cfg.LogConfig.AddSource {
+		t.Errorf("expected AddSource true, got false")
 	}
 
 	if cfg.GitConfig.PullInterval != 10*time.Minute {
@@ -163,8 +164,8 @@ git:
 		t.Errorf("expected log level error, got %s", cfg.LogConfig.LevelStr)
 	}
 
-	if cfg.LogConfig.Level != 2 { // logrus.ErrorLevel == 2
-		t.Errorf("expected logrus.ErrorLevel (2), got %d", cfg.LogConfig.Level)
+	if cfg.LogConfig.Level != slog.LevelError {
+		t.Errorf("expected LevelError, got %d", cfg.LogConfig.Level)
 	}
 
 	if cfg.GitConfig.PullInterval != 5*time.Minute {

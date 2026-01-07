@@ -1,17 +1,16 @@
-//nolint:forbidigo // This package configures log packages.
 package config
 
 import (
 	"context"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"os"
 	"path"
+	"strings"
 	"time"
 
 	"github.com/sethvargo/go-envconfig"
-	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v3"
 )
 
@@ -38,10 +37,10 @@ type WebConfig struct {
 }
 
 type LogConfig struct {
-	LevelStr      string       `yaml:"level"         env:"LEVEL"`
-	Path          string       `yaml:"path"          env:"PATH"`
-	Level         logrus.Level `yaml:"-"`
-	AddMethodName bool         `yaml:"addMethodName" env:"ADD_METHOD_NAME"`
+	LevelStr  string     `yaml:"level"     env:"LEVEL"`
+	Path      string     `yaml:"path"      env:"PATH"`
+	Level     slog.Level `yaml:"-"`
+	AddSource bool       `yaml:"addSource" env:"ADD_SOURCE"`
 }
 
 type GitConfig struct {
@@ -70,7 +69,7 @@ func GetConfig() *Config {
 
 func GetConfigWithContext(ctx context.Context) *Config {
 	if config == nil {
-		cfg := GetConfigFromFile()
+		cfg := GetConfigFromFile(ctx)
 
 		err := envconfig.ProcessWith(ctx, &envconfig.Config{
 			Target:           cfg,
@@ -78,13 +77,28 @@ func GetConfigWithContext(ctx context.Context) *Config {
 			DefaultOverwrite: true,
 		})
 		if err != nil {
-			log.Fatalf("Failed to process env config: %v", err)
+			slog.ErrorContext(ctx, "Failed to process env config", slog.Any("error", err))
+			os.Exit(1) //nolint:forbidigo // This package configures log packages.
 		}
 
 		if cfg.LogConfig.LevelStr != "" {
-			level, err := logrus.ParseLevel(cfg.LogConfig.LevelStr)
-			if err != nil {
-				log.Fatalf("Failed to parse log level: %v", err)
+			level := slog.LevelInfo
+
+			switch strings.ToLower(cfg.LogConfig.LevelStr) {
+			case "debug":
+				level = slog.LevelDebug
+			case "info":
+				level = slog.LevelInfo
+			case "warn", "warning":
+				level = slog.LevelWarn
+			case "error":
+				level = slog.LevelError
+			default:
+				slog.ErrorContext(
+					ctx,
+					"Invalid log level in config, defaulting to info",
+					slog.String("level", cfg.LogConfig.LevelStr),
+				)
 			}
 
 			cfg.LogConfig.Level = level
@@ -96,12 +110,17 @@ func GetConfigWithContext(ctx context.Context) *Config {
 	return config
 }
 
-func GetConfigFromFile() *Config {
+func GetConfigFromFile(ctx context.Context) *Config {
 	newConfig := GetDefaultConfig()
 
-	file, err := os.Open(getConfigFilePath())
+	file, err := os.Open(getConfigFilePath(ctx))
 	if err != nil {
-		log.Fatalf("Failed to open config file: %v", err)
+		slog.ErrorContext(
+			ctx,
+			"Failed to open config file",
+			slog.Any("error", err),
+		)
+		os.Exit(1) //nolint:forbidigo // This package configures log packages.
 	}
 	defer func(file *os.File) {
 		fileErr := file.Close()
@@ -117,18 +136,30 @@ func GetConfigFromFile() *Config {
 			fmt.Printf("Failed to close config file: %v", fileErr)
 		}
 
-		log.Fatalf("Failed to read config file: %v", err) //nolint:gocritic
+		slog.ErrorContext(
+			ctx,
+			"Failed to read config file",
+			slog.Any("error", err),
+		)
+		//nolint:forbidigo,gocritic // This package configures log packages.
+		os.Exit(1)
 	}
 
 	err = yaml.Unmarshal(content, newConfig)
 	if err != nil {
-		log.Fatalf("Failed to parse config file: %v", err)
+		slog.ErrorContext(
+			ctx,
+			"Failed to parse config file",
+			slog.Any("error", err),
+		)
+		//nolint:forbidigo // This package configures log packages.
+		os.Exit(1)
 	}
 
 	return newConfig
 }
 
-func getConfigFilePath() string {
+func getConfigFilePath(ctx context.Context) string {
 	configPath := os.Getenv("CONFIG_PATH")
 	if configPath != "" {
 		return configPath
@@ -138,7 +169,12 @@ func getConfigFilePath() string {
 	if configDir == "" {
 		cwd, err := os.Getwd()
 		if err != nil {
-			log.Fatalf("%v", err)
+			slog.ErrorContext(
+				ctx,
+				"Failed to get current working directory",
+				slog.Any("error", err),
+			)
+			os.Exit(1) //nolint:forbidigo // This package configures log packages.
 		}
 
 		configDir = cwd
@@ -156,8 +192,8 @@ func GetDefaultConfig() *Config {
 			Port: defaultPort,
 		},
 		LogConfig: &LogConfig{
-			Level:         logrus.WarnLevel,
-			AddMethodName: false,
+			Level:     slog.LevelWarn,
+			AddSource: false,
 		},
 		GitConfig: &GitConfig{
 			RepoPath:     "./tmp/repo",

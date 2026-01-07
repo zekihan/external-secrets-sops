@@ -3,8 +3,7 @@ package pubsub
 import (
 	"context"
 	"fmt"
-
-	log "github.com/sirupsen/logrus"
+	"log/slog"
 
 	"github.com/zekihan/external-secrets-sops/git"
 )
@@ -22,16 +21,20 @@ func PublishGithubEvent(ctx context.Context, message string) error {
 
 func ListenGithubEvents() context.CancelFunc {
 	return getPubSuber().Listen(githubEventsChannel, func(ctx context.Context, payload string) error {
-		log.Infof("Received GitHub event: %s", payload)
+		slog.InfoContext(
+			ctx,
+			"Received GitHub event, pulling latest changes from git",
+			slog.String("payload", payload),
+		)
 
 		err := git.Pull(ctx)
 		if err != nil {
-			log.Errorf("Error pulling from git: %v", err)
+			slog.ErrorContext(ctx, "Error pulling from git", slog.Any("error", err))
 
 			return fmt.Errorf("error pulling from git: %w", err)
 		}
 
-		log.Infof("Successfully pulled latest changes from git")
+		slog.InfoContext(ctx, "Successfully pulled from git")
 
 		return nil
 	})
