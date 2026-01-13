@@ -86,7 +86,10 @@ func main() {
 		cancelGitPullLoop := git.StartPullLoop()
 		defer cancelGitPullLoop()
 	} else {
-		slog.WarnContext(context.Background(), "Git repository URL is not configured, skipping git pulling")
+		slog.WarnContext(
+			context.Background(),
+			"Git repository URL is not configured, skipping git pulling",
+		)
 	}
 
 	runWebServer()
