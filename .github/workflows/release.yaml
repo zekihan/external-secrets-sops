@@ -18,7 +18,7 @@ env:
 
 jobs:
   release:
-    runs-on: zekihan.external-secrets-sops
+    runs-on: ubuntu-latest
     steps:
       - name: Check Out The Repo
         uses: actions/checkout@v6.0.2
