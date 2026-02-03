@@ -8,7 +8,7 @@ require (
 	github.com/justinas/alice v1.2.0
 	github.com/redis/go-redis/v9 v9.17.3
 	github.com/sethvargo/go-envconfig v1.3.0
-	github.com/zekihan/go-commons v1.0.3
+	github.com/zekihan/go-commons v1.0.4
 	gopkg.in/yaml.v3 v3.0.1
 )
 
