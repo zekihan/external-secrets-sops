@@ -4,7 +4,7 @@ go 1.25.7
 
 require (
 	github.com/getsops/sops/v3 v3.11.0
-	github.com/go-git/go-git/v5 v5.16.4
+	github.com/go-git/go-git/v5 v5.16.5
 	github.com/justinas/alice v1.2.0
 	github.com/redis/go-redis/v9 v9.17.3
 	github.com/sethvargo/go-envconfig v1.3.0
