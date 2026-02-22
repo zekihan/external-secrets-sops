@@ -3,7 +3,7 @@ module github.com/zekihan/external-secrets-sops
 go 1.26.0
 
 require (
-	github.com/getsops/sops/v3 v3.12.0
+	github.com/getsops/sops/v3 v3.12.1
 	github.com/go-git/go-git/v5 v5.16.5
 	github.com/justinas/alice v1.2.0
 	github.com/redis/go-redis/v9 v9.18.0
