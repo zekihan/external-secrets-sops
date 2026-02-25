@@ -4,7 +4,7 @@ go 1.26.0
 
 require (
 	github.com/getsops/sops/v3 v3.12.1
-	github.com/go-git/go-git/v5 v5.16.5
+	github.com/go-git/go-git/v5 v5.17.0
 	github.com/justinas/alice v1.2.0
 	github.com/redis/go-redis/v9 v9.18.0
 	github.com/sethvargo/go-envconfig v1.3.0
@@ -74,7 +74,7 @@ require (
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/getsops/gopgagent v0.0.0-20241224165529-7044f28e491e // indirect
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
-	github.com/go-git/go-billy/v5 v5.6.2 // indirect
+	github.com/go-git/go-billy/v5 v5.8.0 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.3 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
