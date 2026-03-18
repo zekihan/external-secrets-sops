@@ -12,7 +12,7 @@ import (
 func TestGetCommit_Success(t *testing.T) {
 	localTmpDir := setupTestRepo(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/commit", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/commit", http.NoBody)
 	w := httptest.NewRecorder()
 
 	GetCommit(w, req)

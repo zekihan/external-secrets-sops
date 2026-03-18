@@ -10,7 +10,7 @@ import (
 func TestForceSync_Success(t *testing.T) {
 	_ = setupTestRepo(t)
 
-	req := httptest.NewRequest(http.MethodPost, "/force-sync", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/force-sync", http.NoBody)
 	w := httptest.NewRecorder()
 
 	ForceSync(w, req)

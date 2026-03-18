@@ -11,7 +11,12 @@ import (
 func TestGetSecret(t *testing.T) {
 	setupTestConfig(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/secret/project1/config1/dev", http.NoBody)
+	req := httptest.NewRequestWithContext(
+		t.Context(),
+		http.MethodGet,
+		"/secret/project1/config1/dev",
+		http.NoBody,
+	)
 	req.SetPathValue("project", "project1")
 	req.SetPathValue("config", "config1")
 	req.SetPathValue("environment", "dev")
@@ -44,7 +49,12 @@ func TestGetSecret(t *testing.T) {
 }
 
 func TestGetAllSecret(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/secret/project1/config1/dev", http.NoBody)
+	req := httptest.NewRequestWithContext(
+		t.Context(),
+		http.MethodGet,
+		"/secret/project1/config1/dev",
+		http.NoBody,
+	)
 	req.SetPathValue("project", "project1")
 	req.SetPathValue("config", "config1")
 	req.SetPathValue("environment", "dev")

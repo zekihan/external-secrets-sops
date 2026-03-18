@@ -10,7 +10,7 @@ import (
 func TestReady_Success(t *testing.T) {
 	_ = setupTestRepo(t)
 
-	req := httptest.NewRequest(http.MethodPost, "/ready", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/ready", http.NoBody)
 	w := httptest.NewRecorder()
 
 	GetReady(w, req)
@@ -39,7 +39,7 @@ func TestReady_Success(t *testing.T) {
 
 // TestReady_NotReady tests the case when the repo is not ready.
 func TestReady_NotReady(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "/ready", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/ready", http.NoBody)
 	w := httptest.NewRecorder()
 
 	GetReady(w, req)
