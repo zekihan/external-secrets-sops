@@ -16,7 +16,7 @@ RUN case ${TARGETPLATFORM} in \
     esac && \
     mv ./dist/external-secrets-sops_linux_${ARCH}/external-secrets-sops /usr/bin/external-secrets-sops
 
-FROM --platform=$BUILDPLATFORM zekihan/distroless:v1.0.0@sha256:fd8ae4c8747f74f9692fbbd6abbc6c747a7890acfa8fa40d19939f0bf2085211 AS final
+FROM --platform=$BUILDPLATFORM zekihan/distroless:v1.0.0@sha256:6524078396003523804b9f1c1a008e919e8a9a193193d338d192e4231f3276fa AS final
 
 COPY --from=builder /usr/bin/external-secrets-sops /usr/bin/external-secrets-sops
 
