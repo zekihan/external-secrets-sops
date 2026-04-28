@@ -6,7 +6,7 @@ require (
 	github.com/getsops/sops/v3 v3.12.2
 	github.com/go-git/go-git/v5 v5.18.0
 	github.com/justinas/alice v1.2.0
-	github.com/redis/go-redis/v9 v9.18.0
+	github.com/redis/go-redis/v9 v9.19.0
 	github.com/sethvargo/go-envconfig v1.3.0
 	github.com/zekihan/go-commons v1.0.4
 	gopkg.in/yaml.v3 v3.0.1
@@ -66,7 +66,6 @@ require (
 	github.com/cncf/xds/go v0.0.0-20251210132809-ee656c7534f5 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
 	github.com/cyphar/filepath-securejoin v0.4.1 // indirect
-	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/emirpasic/gods v1.18.1 // indirect
 	github.com/envoyproxy/go-control-plane/envoy v1.36.0 // indirect
 	github.com/envoyproxy/protoc-gen-validate v1.3.0 // indirect
