@@ -173,8 +173,8 @@ github.com/felixge/httpsnoop v1.0.4 h1:NFTV2Zj1bL4mc9sqWACXbQFVBBg2W3GPvqp8/ESS2
 github.com/felixge/httpsnoop v1.0.4/go.mod h1:m8KPJKqk1gH5J9DgRY2ASl2lWCfGKXixSwevea8zH2U=
 github.com/getsops/gopgagent v0.0.0-20241224165529-7044f28e491e h1:y/1nzrdF+RPds4lfoEpNhjfmzlgZtPqyO3jMzrqDQws=
 github.com/getsops/gopgagent v0.0.0-20241224165529-7044f28e491e/go.mod h1:awFzISqLJoZLm+i9QQ4SgMNHDqljH6jWV0B36V5MrUM=
-github.com/getsops/sops/v3 v3.13.0 h1:VixwWpYH7dtyKQmgztGuzFWsVpOjf3aBptYZPcWT7lM=
-github.com/getsops/sops/v3 v3.13.0/go.mod h1:nzNfOsDemdMbRMKiSizOQrePnGMVQPZCQn5O4n0BpnY=
+github.com/getsops/sops/v3 v3.13.1 h1:Ut+4QWrDD5yrbcPwXsc+w5WQozqg6KaPH6vRF8NVH1Y=
+github.com/getsops/sops/v3 v3.13.1/go.mod h1:7aUmuMVEyzf8SsZoziMScyeEwhMse5TfzkIwT8jJfL4=
 github.com/gliderlabs/ssh v0.3.8 h1:a4YXD1V7xMF9g5nTkdfnja3Sxy1PVDCj1Zg4Wb8vY6c=
 github.com/gliderlabs/ssh v0.3.8/go.mod h1:xYoytBv1sV0aL3CavoDuJIQNURXkkfPA/wxQ1pL1fAU=
 github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 h1:+zs/tPmkDkHx3U66DAb0lQFJrpS6731Oaa12ikc+DiI=
