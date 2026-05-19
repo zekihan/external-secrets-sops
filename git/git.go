@@ -191,6 +191,7 @@ func GetLastCommit(ctx context.Context) (*object.Commit, error) {
 
 func StartPullLoop() context.CancelFunc {
 	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
 
 	err := Pull(ctx)
 	if err != nil {
@@ -200,6 +201,8 @@ func StartPullLoop() context.CancelFunc {
 	ticker := time.NewTicker(config.GetConfig().GitConfig.PullInterval)
 
 	go func() {
+		defer close(done)
+
 		for {
 			select {
 			case <-ticker.C:
@@ -215,5 +218,8 @@ func StartPullLoop() context.CancelFunc {
 		}
 	}()
 
-	return cancel
+	return func() {
+		cancel()
+		<-done
+	}
 }
