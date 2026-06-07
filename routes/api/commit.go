@@ -10,9 +10,15 @@ import (
 
 func GetCommit(w http.ResponseWriter, r *http.Request) {
 	commit, err := git.GetLastCommit(r.Context())
-	if web.CheckError(w, err, http.StatusInternalServerError, "Failed to get last commit") {
+	if web.CheckError(
+		r.Context(),
+		w,
+		err,
+		http.StatusInternalServerError,
+		"Failed to get last commit",
+	) {
 		return
 	}
 
-	web.WriteString(w, commit.String()+"\n")
+	web.WriteString(r.Context(), w, commit.String()+"\n")
 }

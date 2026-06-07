@@ -24,18 +24,24 @@ func GetSecret(w http.ResponseWriter, r *http.Request) {
 	)
 
 	getSecret, err := secret.GetSecret(project, config, environment, key)
-	if web.CheckError(w, err, http.StatusInternalServerError, "Failed to get secret") {
+	if web.CheckError(r.Context(), w, err, http.StatusInternalServerError, "Failed to get secret") {
 		return
 	}
 
 	response := Response{Value: getSecret}
 
 	bytes, err := json.Marshal(response)
-	if web.CheckError(w, err, http.StatusInternalServerError, "Failed to marshal response") {
+	if web.CheckError(
+		r.Context(),
+		w,
+		err,
+		http.StatusInternalServerError,
+		"Failed to marshal response",
+	) {
 		return
 	}
 
-	web.Write(w, bytes)
+	web.Write(r.Context(), w, bytes)
 }
 
 func GetAllSecret(w http.ResponseWriter, r *http.Request) {
@@ -50,18 +56,24 @@ func GetAllSecret(w http.ResponseWriter, r *http.Request) {
 	)
 
 	secrets, err := secret.GetAllSecretsComputed(project, config, environment)
-	if web.CheckError(w, err, http.StatusInternalServerError, "Failed to get secret") {
+	if web.CheckError(r.Context(), w, err, http.StatusInternalServerError, "Failed to get secret") {
 		return
 	}
 
 	response := Response{Values: secrets}
 
 	bytes, err := json.Marshal(response)
-	if web.CheckError(w, err, http.StatusInternalServerError, "Failed to marshal response") {
+	if web.CheckError(
+		r.Context(),
+		w,
+		err,
+		http.StatusInternalServerError,
+		"Failed to marshal response",
+	) {
 		return
 	}
 
-	web.Write(w, bytes)
+	web.Write(r.Context(), w, bytes)
 }
 
 type Response struct {

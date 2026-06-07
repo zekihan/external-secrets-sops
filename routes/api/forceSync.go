@@ -17,9 +17,15 @@ func ForceSync(w http.ResponseWriter, r *http.Request) {
 	}
 
 	err := pubsub.PublishGithubEvent(r.Context(), message)
-	if web.CheckError(w, err, http.StatusInternalServerError, "Failed to publish github event") {
+	if web.CheckError(
+		r.Context(),
+		w,
+		err,
+		http.StatusInternalServerError,
+		"Failed to publish github event",
+	) {
 		return
 	}
 
-	web.WriteString(w, "Sync event published successfully\n")
+	web.WriteString(r.Context(), w, "Sync event published successfully\n")
 }

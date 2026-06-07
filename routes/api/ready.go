@@ -8,13 +8,13 @@ import (
 	"github.com/zekihan/external-secrets-sops/git"
 )
 
-func GetReady(w http.ResponseWriter, _ *http.Request) {
+func GetReady(w http.ResponseWriter, r *http.Request) {
 	if git.IsRepoReady() {
-		web.WriteString(w, "OK\n")
+		web.WriteString(r.Context(), w, "OK\n")
 
 		return
 	}
 
 	w.WriteHeader(http.StatusServiceUnavailable)
-	web.WriteString(w, "Service is not ready\n")
+	web.WriteString(r.Context(), w, "Service is not ready\n")
 }
