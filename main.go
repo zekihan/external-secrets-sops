@@ -2,12 +2,16 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/justinas/alice"
@@ -25,7 +29,8 @@ import (
 )
 
 const (
-	defaultTimeout = 10 * time.Second
+	defaultTimeout  = 10 * time.Second
+	shutdownTimeout = 30 * time.Second
 )
 
 var (
@@ -76,6 +81,10 @@ func init() {
 }
 
 func main() {
+	os.Exit(run())
+}
+
+func run() int {
 	slog.InfoContext(context.Background(), "Starting external secrets sops server")
 	utils.LogVersionInfo(context.Background())
 
@@ -92,10 +101,17 @@ func main() {
 		)
 	}
 
-	runWebServer()
+	err := runWebServer()
+	if err != nil {
+		slog.ErrorContext(context.Background(), "Server error", slog.Any("error", err))
+
+		return 1
+	}
+
+	return 0
 }
 
-func runWebServer() {
+func runWebServer() error {
 	// API routes.
 	http.HandleFunc("/api/ping", ping.GetPing)
 	http.HandleFunc("/api/health", health.GetHealth)
@@ -131,9 +147,34 @@ func runWebServer() {
 		WriteTimeout: defaultTimeout,
 	}
 
-	err := srv.ListenAndServe()
-	if err != nil {
-		slog.ErrorContext(context.Background(), "Error starting server", slog.Any("error", err))
-		os.Exit(1)
+	serverErr := make(chan error, 1)
+
+	go func() {
+		err := srv.ListenAndServe()
+		if !errors.Is(err, http.ErrServerClosed) {
+			serverErr <- err
+		} else {
+			serverErr <- nil
+		}
+	}()
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	select {
+	case err := <-serverErr:
+		return err
+	case <-sigChan:
+		slog.InfoContext(context.Background(), "Shutdown signal received, stopping server")
 	}
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer shutdownCancel()
+
+	err := srv.Shutdown(shutdownCtx)
+	if err != nil {
+		return fmt.Errorf("graceful shutdown failed: %w", err)
+	}
+
+	return nil
 }

@@ -48,6 +48,83 @@ func TestGetSecret(t *testing.T) {
 	}
 }
 
+func TestGetSecret_KeyNotFound(t *testing.T) {
+	setupTestConfig(t)
+
+	req := httptest.NewRequestWithContext(
+		t.Context(),
+		http.MethodGet,
+		"/secret/project1/config1/dev/NONEXISTENT_KEY",
+		http.NoBody,
+	)
+	req.SetPathValue("project", "project1")
+	req.SetPathValue("config", "config1")
+	req.SetPathValue("environment", "dev")
+	req.SetPathValue("key", "NONEXISTENT_KEY")
+
+	rr := httptest.NewRecorder()
+
+	GetSecret(rr, req)
+
+	resp := rr.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("expected status 404, got %d", resp.StatusCode)
+	}
+}
+
+func TestGetSecret_InvalidPath(t *testing.T) {
+	setupTestConfig(t)
+
+	req := httptest.NewRequestWithContext(
+		t.Context(),
+		http.MethodGet,
+		"/secret/../config1/dev/key",
+		http.NoBody,
+	)
+	req.SetPathValue("project", "..")
+	req.SetPathValue("config", "config1")
+	req.SetPathValue("environment", "dev")
+	req.SetPathValue("key", "key")
+
+	rr := httptest.NewRecorder()
+
+	GetSecret(rr, req)
+
+	resp := rr.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("expected status 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestGetAllSecret_InvalidPath(t *testing.T) {
+	setupTestConfig(t)
+
+	req := httptest.NewRequestWithContext(
+		t.Context(),
+		http.MethodGet,
+		"/secret/../config1/dev",
+		http.NoBody,
+	)
+	req.SetPathValue("project", "..")
+	req.SetPathValue("config", "config1")
+	req.SetPathValue("environment", "dev")
+
+	rr := httptest.NewRecorder()
+
+	GetAllSecret(rr, req)
+
+	resp := rr.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("expected status 400, got %d", resp.StatusCode)
+	}
+}
+
 func TestGetAllSecret(t *testing.T) {
 	req := httptest.NewRequestWithContext(
 		t.Context(),

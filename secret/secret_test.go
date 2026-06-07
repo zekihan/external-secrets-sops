@@ -1,6 +1,7 @@
 package secret
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -63,6 +64,34 @@ func TestGetAllSecrets(t *testing.T) {
 
 	if values["DATABASE_HOST"] != "dev-db.example.com" {
 		t.Errorf("expected DATABASE_HOST to be dev-db.example.com, got %s", values["DATABASE_HOST"])
+	}
+}
+
+func TestGetSecret_KeyNotFound(t *testing.T) {
+	setupTestConfig(t)
+
+	_, err := GetSecret("project1", "config1", "dev", "NONEXISTENT_KEY")
+	if !errors.Is(err, ErrKeyNotFound) {
+		t.Errorf("expected ErrKeyNotFound, got %v", err)
+	}
+}
+
+func TestGetAllSecrets_InvalidPath(t *testing.T) {
+	setupTestConfig(t)
+
+	_, err := GetAllSecrets("..", "config1", "dev")
+	if !errors.Is(err, ErrInvalidPath) {
+		t.Errorf("expected ErrInvalidPath, got %v", err)
+	}
+
+	_, err = GetAllSecrets("project1", "..", "dev")
+	if !errors.Is(err, ErrInvalidPath) {
+		t.Errorf("expected ErrInvalidPath, got %v", err)
+	}
+
+	_, err = GetAllSecrets("project1", "config1", "..")
+	if !errors.Is(err, ErrInvalidPath) {
+		t.Errorf("expected ErrInvalidPath, got %v", err)
 	}
 }
 

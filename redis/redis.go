@@ -2,6 +2,8 @@ package redis
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -13,7 +15,10 @@ import (
 
 var (
 	redisClient redis.UniversalClient
+	errRedis    error
 	once        sync.Once
+
+	errUnexpectedPong = errors.New("unexpected PONG response from Redis")
 
 	defaultPoolSize        = 32                     // Default pool size for Redis connections
 	defaultMaxRetries      = 3                      // Default maximum number of retries for Redis commands
@@ -28,10 +33,11 @@ func resetRedisClient() {
 		redisClient = nil
 	}
 
+	errRedis = nil
 	once = sync.Once{}
 }
 
-func GetRedisClient() redis.UniversalClient {
+func GetRedisClient() (redis.UniversalClient, error) {
 	once.Do(func() {
 		cfg := config.GetConfig()
 
@@ -60,15 +66,21 @@ func GetRedisClient() redis.UniversalClient {
 
 		res, err := redisClient.Ping(ctx).Result()
 		if err != nil {
-			panic("failed to connect to Redis: " + err.Error())
+			errRedis = fmt.Errorf("failed to connect to Redis: %w", err)
+			redisClient = nil
+
+			return
 		}
 
 		if res != "PONG" {
-			panic("failed to connect to Redis: unexpected response " + res)
+			errRedis = fmt.Errorf("%w: %q", errUnexpectedPong, res)
+			redisClient = nil
+
+			return
 		}
 
 		slog.DebugContext(ctx, "Connected to Redis", slog.Any("addrs", redisCfg.Addrs))
 	})
 
-	return redisClient
+	return redisClient, errRedis
 }

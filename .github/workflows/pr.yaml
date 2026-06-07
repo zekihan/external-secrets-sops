@@ -11,7 +11,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   GOPRIVATE_GITHUB_TOKEN: ${{ secrets.GOPRIVATE_GITHUB_TOKEN }}
@@ -20,6 +20,7 @@ env:
 jobs:
   pr:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Check Out The Repo
         uses: actions/checkout@v6.0.3

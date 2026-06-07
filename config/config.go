@@ -2,7 +2,6 @@ package config
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -47,6 +46,7 @@ type GitConfig struct {
 	RepoPath     string        `yaml:"repoPath"     env:"REPO_PATH"`
 	RepoURL      string        `yaml:"repoUrl"      env:"REPO_URL"`
 	AccessToken  string        `yaml:"accessToken"  env:"ACCESS_TOKEN"`
+	Branch       string        `yaml:"branch"       env:"BRANCH"`
 	SecretsPath  string        `yaml:"secretsPath"  env:"SECRETS_PATH"`
 	PullInterval time.Duration `yaml:"pullInterval" env:"PULL_INTERVAL"`
 }
@@ -125,17 +125,12 @@ func GetConfigFromFile(ctx context.Context) *Config {
 	defer func(file *os.File) {
 		fileErr := file.Close()
 		if fileErr != nil {
-			fmt.Printf("Failed to close config file: %v", fileErr)
+			slog.ErrorContext(ctx, "Failed to close config file", slog.Any("error", fileErr))
 		}
 	}(file)
 
 	content, err := io.ReadAll(file)
 	if err != nil {
-		fileErr := file.Close()
-		if fileErr != nil {
-			fmt.Printf("Failed to close config file: %v", fileErr)
-		}
-
 		slog.ErrorContext(
 			ctx,
 			"Failed to read config file",
@@ -199,6 +194,7 @@ func GetDefaultConfig() *Config {
 			RepoPath:     "./tmp/repo",
 			RepoURL:      "",
 			AccessToken:  "",
+			Branch:       "main",
 			PullInterval: defaultPullInterval,
 			SecretsPath:  "./",
 		},

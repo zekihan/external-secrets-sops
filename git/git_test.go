@@ -42,6 +42,7 @@ func setupTestRepo(t *testing.T) (string, string) {
 	config.GetConfig().GitConfig.RepoPath = localTmpDir
 	config.GetConfig().GitConfig.RepoURL = remoteTmpDir // local path for clone
 	config.GetConfig().GitConfig.AccessToken = ""
+	config.GetConfig().GitConfig.Branch = "main"
 	config.GetConfig().GitConfig.PullInterval = time.Second
 
 	cleanup := func() {

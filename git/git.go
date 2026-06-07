@@ -15,6 +15,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
 
 	"github.com/zekihan/external-secrets-sops/config"
+	"github.com/zekihan/external-secrets-sops/internal/reposync"
 )
 
 var errRepoURLEmpty = errors.New("repoUrl is empty")
@@ -71,7 +72,7 @@ func cloneIfNotExists(ctx context.Context, repoURL, repoPath string) error {
 		}
 	}
 
-	_, err := git.PlainClone(repoPath, false, cloneOptions)
+	_, err := git.PlainCloneContext(ctx, repoPath, false, cloneOptions)
 	if err != nil {
 		return fmt.Errorf("failed to clone %s repository: %w", repoURL, err)
 	}
@@ -108,7 +109,7 @@ func Pull(ctx context.Context) error {
 		}
 	}
 
-	err = remote.Fetch(fetchOptions)
+	err = remote.FetchContext(ctx, fetchOptions)
 	if err != nil {
 		if errors.Is(err, git.NoErrAlreadyUpToDate) {
 			commit, commitErr := GetLastCommit(ctx)
@@ -128,9 +129,11 @@ func Pull(ctx context.Context) error {
 		return fmt.Errorf("failed to fetch from remote: %w", err)
 	}
 
-	newRef, err := repo.Reference(plumbing.NewRemoteReferenceName("origin", "main"), false)
+	branch := config.GetConfigWithContext(ctx).GitConfig.Branch
+
+	newRef, err := repo.Reference(plumbing.NewRemoteReferenceName("origin", branch), false)
 	if err != nil {
-		return fmt.Errorf("failed to get reference for origin/main: %w", err)
+		return fmt.Errorf("failed to get reference for origin/%s: %w", branch, err)
 	}
 
 	wt, err := repo.Worktree()
@@ -138,10 +141,13 @@ func Pull(ctx context.Context) error {
 		return fmt.Errorf("failed to get worktree: %w", err)
 	}
 
+	reposync.Mu.Lock()
 	err = wt.Reset(&git.ResetOptions{
 		Commit: newRef.Hash(),
 		Mode:   git.HardReset,
 	})
+	reposync.Mu.Unlock()
+
 	if err != nil {
 		return fmt.Errorf("failed to reset worktree: %w", err)
 	}

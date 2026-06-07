@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 
@@ -24,6 +25,18 @@ func GetSecret(w http.ResponseWriter, r *http.Request) {
 	)
 
 	getSecret, err := secret.GetSecret(project, config, environment, key)
+	if errors.Is(err, secret.ErrInvalidPath) {
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+
+		return
+	}
+
+	if errors.Is(err, secret.ErrKeyNotFound) {
+		http.NotFound(w, r)
+
+		return
+	}
+
 	if web.CheckError(r.Context(), w, err, http.StatusInternalServerError, "Failed to get secret") {
 		return
 	}
@@ -56,6 +69,12 @@ func GetAllSecret(w http.ResponseWriter, r *http.Request) {
 	)
 
 	secrets, err := secret.GetAllSecretsComputed(project, config, environment)
+	if errors.Is(err, secret.ErrInvalidPath) {
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+
+		return
+	}
+
 	if web.CheckError(r.Context(), w, err, http.StatusInternalServerError, "Failed to get secret") {
 		return
 	}

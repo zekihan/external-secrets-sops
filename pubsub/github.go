@@ -21,11 +21,8 @@ func PublishGithubEvent(ctx context.Context, message string) error {
 
 func ListenGithubEvents() context.CancelFunc {
 	return getPubSuber().Listen(githubEventsChannel, func(ctx context.Context, payload string) error {
-		slog.InfoContext(
-			ctx,
-			"Received GitHub event, pulling latest changes from git",
-			slog.String("payload", payload),
-		)
+		slog.InfoContext(ctx, "Received GitHub event, pulling latest changes from git")
+		slog.DebugContext(ctx, "GitHub event payload", slog.String("payload", payload))
 
 		err := git.Pull(ctx)
 		if err != nil {

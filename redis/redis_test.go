@@ -21,7 +21,11 @@ func TestGetRedisClient_Enabled(t *testing.T) {
 
 	resetRedisClient()
 
-	client := GetRedisClient()
+	client, err := GetRedisClient()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
 	if client == nil {
 		t.Error("expected redis client to be initialized when enabled")
 	}
@@ -33,7 +37,11 @@ func TestGetRedisClient_Disabled(t *testing.T) {
 
 	resetRedisClient()
 
-	client := GetRedisClient()
+	client, err := GetRedisClient()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
 	if client != nil {
 		t.Error("expected redis client to be nil when disabled")
 	}
