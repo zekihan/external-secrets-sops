@@ -6,7 +6,7 @@ require (
 	github.com/getsops/sops/v3 v3.13.3
 	github.com/go-git/go-git/v5 v5.19.2
 	github.com/justinas/alice v1.2.0
-	github.com/redis/go-redis/v9 v9.21.0
+	github.com/redis/go-redis/v9 v9.22.0
 	github.com/sethvargo/go-envconfig v1.4.3
 	github.com/zekihan/go-commons v1.0.7
 	gopkg.in/yaml.v3 v3.0.1
