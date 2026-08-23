@@ -18,9 +18,8 @@ var (
 
 func getPubSuber() *pubsub.UniversalPubSub {
 	pubSuberOnce.Do(func() {
-		opts := &pubsub.UniversalPubSubOptions{
-			Prefix: "ess",
-		}
+		opts := new(pubsub.UniversalPubSubOptions)
+		opts.Prefix = "ess"
 
 		if config.GetConfig().RedisConfig.Enabled {
 			redisClient, err := redis.GetRedisClient()

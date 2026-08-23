@@ -61,10 +61,10 @@ func cloneCheckIfExists(repoURL, repoPath string) error {
 }
 
 func cloneIfNotExists(ctx context.Context, repoURL, repoPath string) error {
-	cloneOptions := &git.CloneOptions{
-		URL:      repoURL,
-		Progress: os.Stdout,
-	}
+	cloneOptions := new(git.CloneOptions)
+	cloneOptions.URL = repoURL
+
+	cloneOptions.Progress = os.Stdout
 	if config.GetConfigWithContext(ctx).GitConfig.AccessToken != "" {
 		cloneOptions.Auth = &http.BasicAuth{
 			Username: "X", // anything except an empty string
@@ -101,7 +101,7 @@ func Pull(ctx context.Context) error {
 		return fmt.Errorf("failed to get remote 'origin': %w", err)
 	}
 
-	fetchOptions := &git.FetchOptions{}
+	fetchOptions := new(git.FetchOptions)
 	if config.GetConfigWithContext(ctx).GitConfig.AccessToken != "" {
 		fetchOptions.Auth = &http.BasicAuth{
 			Username: "X", // anything except an empty string
@@ -142,10 +142,10 @@ func Pull(ctx context.Context) error {
 	}
 
 	reposync.Mu.Lock()
-	err = wt.Reset(&git.ResetOptions{
-		Commit: newRef.Hash(),
-		Mode:   git.HardReset,
-	})
+	resetOptions := new(git.ResetOptions)
+	resetOptions.Commit = newRef.Hash()
+	resetOptions.Mode = git.HardReset
+	err = wt.Reset(resetOptions)
 	reposync.Mu.Unlock()
 
 	if err != nil {

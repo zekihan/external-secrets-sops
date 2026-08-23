@@ -71,11 +71,12 @@ func GetConfigWithContext(ctx context.Context) *Config {
 	if config == nil {
 		cfg := GetConfigFromFile(ctx)
 
-		err := envconfig.ProcessWith(ctx, &envconfig.Config{
-			Target:           cfg,
-			Lookuper:         envconfig.PrefixLookuper(EnvKeyPrefix, envconfig.OsLookuper()),
-			DefaultOverwrite: true,
-		})
+		envConfig := new(envconfig.Config)
+		envConfig.Target = cfg
+		envConfig.Lookuper = envconfig.PrefixLookuper(EnvKeyPrefix, envconfig.OsLookuper())
+		envConfig.DefaultOverwrite = true
+
+		err := envconfig.ProcessWith(ctx, envConfig)
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to process env config", slog.Any("error", err))
 			os.Exit(1) //nolint:forbidigo // This package configures log packages.
@@ -181,27 +182,23 @@ func getConfigFilePath(ctx context.Context) string {
 }
 
 func GetDefaultConfig() *Config {
-	return &Config{
-		WebConfig: &WebConfig{
-			Host: "127.0.0.1",
-			Port: defaultPort,
-		},
-		LogConfig: &LogConfig{
-			Level:     slog.LevelWarn,
-			AddSource: false,
-		},
-		GitConfig: &GitConfig{
-			RepoPath:     "./tmp/repo",
-			RepoURL:      "",
-			AccessToken:  "",
-			Branch:       "main",
-			PullInterval: defaultPullInterval,
-			SecretsPath:  "./",
-		},
-		RedisConfig: &RedisConfig{
-			Addrs:  make([]string, 0),
-			DB:     0,
-			Prefix: "ess",
-		},
-	}
+	defaultConfig := new(Config)
+	defaultConfig.WebConfig = new(WebConfig)
+	defaultConfig.WebConfig.Host = "127.0.0.1"
+	defaultConfig.WebConfig.Port = defaultPort
+
+	defaultConfig.LogConfig = new(LogConfig)
+	defaultConfig.LogConfig.Level = slog.LevelWarn
+
+	defaultConfig.GitConfig = new(GitConfig)
+	defaultConfig.GitConfig.RepoPath = "./tmp/repo"
+	defaultConfig.GitConfig.Branch = "main"
+	defaultConfig.GitConfig.PullInterval = defaultPullInterval
+	defaultConfig.GitConfig.SecretsPath = "./"
+
+	defaultConfig.RedisConfig = new(RedisConfig)
+	defaultConfig.RedisConfig.Addrs = make([]string, 0)
+	defaultConfig.RedisConfig.Prefix = "ess"
+
+	return defaultConfig
 }

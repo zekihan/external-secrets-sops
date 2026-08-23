@@ -37,15 +37,15 @@ func setupTestRepo(t *testing.T) string {
 	// Create a file and commit it
 	file := filepath.Join(remoteTmpDir, "test.txt")
 	_ = os.WriteFile(file, []byte("hello"), 0o600)
-	w, _ := repo.Worktree()
-	_, _ = w.Add("test.txt")
-	_, _ = w.Commit("initial commit", &git.CommitOptions{
-		Author: &object.Signature{
-			Name:  "tester",
-			Email: "tester@example.com",
-			When:  time.Now(),
-		},
-	})
+	workTree, _ := repo.Worktree()
+	_, _ = workTree.Add("test.txt")
+	commitOptions := new(git.CommitOptions)
+	commitOptions.Author = &object.Signature{
+		Name:  "tester",
+		Email: "tester@example.com",
+		When:  time.Now(),
+	}
+	_, _ = workTree.Commit("initial commit", commitOptions)
 
 	// Set config for the test
 	origConfig := config.GetConfig().GitConfig

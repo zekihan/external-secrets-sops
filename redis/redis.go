@@ -46,20 +46,20 @@ func GetRedisClient() (redis.UniversalClient, error) {
 			return
 		}
 
-		redisClient = redis.NewUniversalClient(&redis.UniversalOptions{
-			Addrs:            redisCfg.Addrs,
-			ClientName:       "ESS",
-			DB:               redisCfg.DB,
-			Username:         redisCfg.Username,
-			Password:         redisCfg.Password,
-			SentinelUsername: redisCfg.SentinelUsername,
-			SentinelPassword: redisCfg.SentinelPassword,
-			PoolSize:         defaultPoolSize,
-			MasterName:       redisCfg.MasterName,
-			MaxRetries:       defaultMaxRetries,
-			MinRetryBackoff:  defaultMinRetryBackoff,
-			MaxRetryBackoff:  defaultMaxRetryBackoff,
-		})
+		redisOptions := new(redis.UniversalOptions)
+		redisOptions.Addrs = redisCfg.Addrs
+		redisOptions.ClientName = "ESS"
+		redisOptions.DB = redisCfg.DB
+		redisOptions.Username = redisCfg.Username
+		redisOptions.Password = redisCfg.Password
+		redisOptions.SentinelUsername = redisCfg.SentinelUsername
+		redisOptions.SentinelPassword = redisCfg.SentinelPassword
+		redisOptions.PoolSize = defaultPoolSize
+		redisOptions.MasterName = redisCfg.MasterName
+		redisOptions.MaxRetries = defaultMaxRetries
+		redisOptions.MinRetryBackoff = defaultMinRetryBackoff
+		redisOptions.MaxRetryBackoff = defaultMaxRetryBackoff
+		redisClient = redis.NewUniversalClient(redisOptions)
 
 		ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 		defer cancel()

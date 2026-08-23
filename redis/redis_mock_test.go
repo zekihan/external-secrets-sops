@@ -23,7 +23,7 @@ func StartMockRedisServer(t *testing.T, addr string) error {
 		listenAddr = defaultListenAddr
 	}
 
-	listenConfig := net.ListenConfig{}
+	listenConfig := new(net.ListenConfig)
 
 	ln, err := listenConfig.Listen(t.Context(), "tcp", listenAddr)
 	if err != nil {

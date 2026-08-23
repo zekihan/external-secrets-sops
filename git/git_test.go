@@ -24,18 +24,20 @@ func setupTestRepo(t *testing.T) (string, string) {
 	_ = os.WriteFile(file, []byte("hello"), 0o600)
 	workTree, _ := repo.Worktree()
 	_, _ = workTree.Add("test.txt")
-	commitObj, _ := workTree.Commit("initial commit", &git.CommitOptions{
-		Author: &object.Signature{
-			Name:  "tester",
-			Email: "tester@example.com",
-			When:  time.Now(),
-		},
-	})
+	commitOptions := new(git.CommitOptions)
+	commitOptions.Author = &object.Signature{
+		Name:  "tester",
+		Email: "tester@example.com",
+		When:  time.Now(),
+	}
+	commitObj, _ := workTree.Commit("initial commit", commitOptions)
 
 	// Create 'main' branch pointing to the initial commit and checkout to it
 	mainRefName := plumbing.NewBranchReferenceName("main")
 	_ = repo.Storer.SetReference(plumbing.NewHashReference(mainRefName, commitObj))
-	_ = workTree.Checkout(&git.CheckoutOptions{Branch: mainRefName})
+	checkoutOptions := new(git.CheckoutOptions)
+	checkoutOptions.Branch = mainRefName
+	_ = workTree.Checkout(checkoutOptions)
 
 	// Set config for the test
 	origConfig := config.GetConfig().GitConfig
@@ -181,15 +183,15 @@ func TestPull_NotAlreadyUpToDate(t *testing.T) {
 
 	file := filepath.Join(remoteTmpDir, "new.txt")
 	_ = os.WriteFile(file, []byte("new content"), 0o600)
-	w, _ := repo.Worktree()
-	_, _ = w.Add("new.txt")
-	_, _ = w.Commit("new commit", &git.CommitOptions{
-		Author: &object.Signature{
-			Name:  "tester",
-			Email: "tester@example.com",
-			When:  time.Now(),
-		},
-	})
+	workTree, _ := repo.Worktree()
+	_, _ = workTree.Add("new.txt")
+	commitOptions := new(git.CommitOptions)
+	commitOptions.Author = &object.Signature{
+		Name:  "tester",
+		Email: "tester@example.com",
+		When:  time.Now(),
+	}
+	_, _ = workTree.Commit("new commit", commitOptions)
 
 	// Pull should fetch the new commit
 	err = Pull(t.Context())

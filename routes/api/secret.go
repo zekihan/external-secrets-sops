@@ -41,7 +41,8 @@ func GetSecret(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response := Response{Value: getSecret}
+	response := new(Response)
+	response.Value = getSecret
 
 	bytes, err := json.Marshal(response)
 	if web.CheckError(
@@ -79,7 +80,8 @@ func GetAllSecret(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response := Response{Values: secrets}
+	response := new(Response)
+	response.Values = secrets
 
 	bytes, err := json.Marshal(response)
 	if web.CheckError(

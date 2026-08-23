@@ -68,10 +68,10 @@ func init() {
 	cfg = config.GetConfig()
 
 	// Init logger.
-	utils.InitLogger(&utils.LoggerConfig{
-		Level:     cfg.LogConfig.Level,
-		AddSource: cfg.LogConfig.AddSource,
-	})
+	loggerConfig := new(utils.LoggerConfig)
+	loggerConfig.Level = cfg.LogConfig.Level
+	loggerConfig.AddSource = cfg.LogConfig.AddSource
+	utils.InitLogger(loggerConfig)
 
 	// Init middleware.
 	stdChain = alice.New(middleware.RecoverHandler, middleware.Logging)
@@ -140,12 +140,11 @@ func runWebServer() error {
 	addr := net.JoinHostPort(host, strconv.Itoa(port))
 	slog.InfoContext(context.Background(), "Starting server on http://"+addr)
 
-	srv := &http.Server{
-		Addr:         addr,
-		Handler:      stdChain.Then(http.DefaultServeMux),
-		ReadTimeout:  defaultTimeout,
-		WriteTimeout: defaultTimeout,
-	}
+	srv := new(http.Server)
+	srv.Addr = addr
+	srv.Handler = stdChain.Then(http.DefaultServeMux)
+	srv.ReadTimeout = defaultTimeout
+	srv.WriteTimeout = defaultTimeout
 
 	serverErr := make(chan error, 1)
 
