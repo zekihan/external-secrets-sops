@@ -5,11 +5,6 @@ version: 2
 
 project_name: external-secrets-sops
 
-before:
-  hooks:
-    - go fmt ./...
-    - go mod tidy
-
 builds:
   - id: all
     binary: &binary '{{ .ProjectName }}_{{.Os}}_{{.Arch}}{{ with .Arm }}v{{ . }}{{ end }}{{ with .Mips }}_{{ . }}{{ end }}{{ if not (eq .Amd64 "v1") }}{{ .Amd64 }}{{ end }}/{{ .ProjectName }}'
@@ -18,10 +13,9 @@ builds:
       - CGO_ENABLED=0
     ldflags: &ldflags
       - -s -w
-      - -X github.com/zekihan/go-commons/utils.Version={{.Version}}
-      - -X github.com/zekihan/go-commons/utils.BuildDate={{.CommitTimestamp}}
-      - -X github.com/zekihan/go-commons/utils.CommitHash={{.Commit}}
-      - -X github.com/zekihan/go-commons/utils.GitTreeState={{.GitTreeState}}
+      - -X main.version={{.Version}}
+      - -X main.buildDate={{.CommitTimestamp}}
+      - -X main.commit={{.Commit}}
     flags: &flags
       - -trimpath
     goos:
@@ -70,7 +64,7 @@ archives:
       - 'license*'
 
 snapshot:
-  version_template: "{{ incpatch .Version }}-SNAPSHOT-{{.ShortCommit}}"
+  version_template: '{{ .Env.RELEASE_VERSION }}-SNAPSHOT-{{.ShortCommit}}'
 
 report_sizes: true
 

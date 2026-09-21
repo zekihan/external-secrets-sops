@@ -1,0 +1,14 @@
+server:
+  address: 0.0.0.0:8080
+git:
+  url: https://github.com/example/secrets.git
+  branch: main
+  root: generated
+  cacheDir: /data/cache
+scope:
+  projects: [example]
+  environments: [staging]
+redis:
+  enabled: true
+  addresses: [redis:6379]
+  passwordEnv: ''

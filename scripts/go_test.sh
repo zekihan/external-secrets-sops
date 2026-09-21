@@ -1,14 +1,6 @@
 #!/bin/sh
-
-set -e
-
-DIR=$( cd -P -- "$(dirname -- "$(command -v -- "$0")")" && pwd -P )
-
-cd "${DIR}/.."
-
-PROJECT_DIR=$(pwd)
-
-export CONFIG_DIR="$PROJECT_DIR"
-export SOPS_AGE_KEY_FILE="$PROJECT_DIR/testdata/key.txt"
-
+set -eu
+DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+cd "$DIR/.."
+export SOPS_AGE_KEY_FILE="$PWD/testdata/key.txt"
 go test "$@"

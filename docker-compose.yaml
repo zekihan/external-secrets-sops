@@ -1,27 +1,21 @@
 services:
   external-secrets-sops:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    ports:
-      - "33000:33000"
-    env_file:
-      - .env
+    build: .
+    command: [serve, --config, /config/config.yaml]
+    ports: [127.0.0.1:8080:8080]
+    env_file: .env
     environment:
-      SOPS_AGE_KEY_FILE: /run/secrets/age/key.txt
-      ESS__REDIS_ADDRS: redis:6379
+      SOPS_AGE_KEY_FILE: /credentials/age.txt
     volumes:
-      - ./config.yaml:/config.yaml
-      - ~/.config/sops/age/keys.txt:/run/secrets/age/key.txt:ro
+      - ./docs/compose-config.yaml:/config/config.yaml:ro
+      - ${SOPS_AGE_KEY_FILE:?Set SOPS_AGE_KEY_FILE}:/credentials/age.txt:ro
+    tmpfs:
+      - /data:uid=25000,gid=25000,mode=0700
+    user: 25000:25000
+    read_only: true
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
     restart: unless-stopped
-
   redis:
     image: docker.io/redis:8.10.2@sha256:d5ac52db24d4e70566fe9944f22cf5bdc2bc739b05c0f426335161ea6c23f3b3
-    ports:
-      - "6379:6379"
-    command: [ "redis-server" ]
-    healthcheck:
-      test: [ "CMD-SHELL", "redis-cli ping | grep PONG" ]
-      interval: 1s
-      timeout: 3s
-      retries: 5
+    command: [redis-server, --save, '', --appendonly, 'no']

@@ -1,56 +1,21 @@
 # AGENTS.md
 
-This file provides guidance to AI Agents when working with code in this repository.
-
 ## Commands
 
-```sh
-# Format and tidy
-make tidy
-
-# Run tests (sets required env vars automatically via scripts/go_test.sh)
-make test
-
-# Run a single test
-./scripts/go_test.sh -v -run TestName ./package/...
-
-# Lint
-make lint
-
-# Build for local platform
-make build
-
-# Run the binary after building
-make run
-```
-
-Tests require `CONFIG_DIR` and `SOPS_AGE_KEY_FILE` env vars — `scripts/go_test.sh` sets these automatically (points to `testdata/key.txt`). Never call `go test` directly; always go through the script.
+- `make fmt`: explicitly format Go source.
+- `make tidy`: explicitly update module dependencies.
+- `make lint`: non-mutating lint (golangci-lint 2.13.2).
+- `make test`: normal and race tests, including disposable Redis integration tests.
+- `./scripts/go_test.sh -run TestName ./internal/...`: focused tests. Never invoke `go test` directly; the wrapper supplies the public fixture Age identity.
+- `make build`: local binary.
+- `make build/all`: snapshot release binaries (GoReleaser 2.18.1).
 
 ## Architecture
 
-This is an HTTP server that serves SOPS-encrypted secrets from a Git repository. The flow:
+The composition root loads strict configuration and constructs explicit dependencies. `internal/source` maintains a bare encrypted Git cache and reads selected commit blobs. `internal/decrypt` wraps embedded SOPS, sanitizing failures. `internal/snapshot` validates flat mappings, merges base/environment data, and publishes immutable snapshots. `internal/syncer` serializes refresh triggers and handles cache restoration, retries, freshness, and deadlines. `internal/notify` provides optional reconnecting Redis hints. `internal/httpapi` exposes role-separated read/admin routes and operational endpoints. `internal/app` owns startup and bounded shutdown.
 
-1. **Git sync** (`git/`) — on startup, clones the configured repo and runs a periodic pull loop (`StartPullLoop`). A force-sync can also be triggered via the API or via a Redis pubsub event from a GitHub webhook.
+Snapshots never expose mutable maps. Each request captures one revision. Failed or expired candidates never replace active secrets. Embedded SOPS calls can outlive cancellation; do not introduce overlapping retries or block HTTP reads on them. Persist only encrypted data and revision metadata. Never log secret values, credentials, or raw decryption errors.
 
-2. **Secret resolution** (`secret/`) — reads YAML files at `<repoPath>/<secretsPath>/<project>/<config>/<environment>/values.yaml`, decrypts with SOPS (Age key via `SOPS_AGE_KEY_FILE`). When the environment is not `"base"`, values from `base/values.yaml` are merged first, with environment-specific values taking precedence.
+## Conventions
 
-3. **HTTP routes** (`routes/api/`, wired in `main.go`):
-   - `GET /secret/{project}/{config}/{environment}` — all secrets for that environment
-   - `GET /secret/{project}/{config}/{environment}/{key}` — single secret value
-   - `GET /git/lastCommit` — last synced commit
-   - `POST /git/forceSync` — trigger immediate git pull
-   - `GET /api/ready` — readiness (depends on git repo being cloned)
-   All secret/git routes require an API key (passed as `ESS__WEB_API_KEY`).
-
-4. **PubSub** (`pubsub/`) — optional Redis-backed pub/sub. When Redis is enabled, GitHub events published on the `github-events` channel trigger an immediate `git.Pull`. Falls back to in-process pub/sub when Redis is disabled.
-
-5. **Config** (`config/`) — loaded from `config.yaml` (or `CONFIG_PATH`/`CONFIG_DIR` env vars), then overridden by env vars prefixed with `ESS__`. Key prefixes: `ESS__GIT_*`, `ESS__WEB_*`, `ESS__LOG_*`, `ESS__REDIS_*`.
-
-## Code conventions
-
-- Use `slog` with structured attributes for all logging; `log.Print*` and `log.Fatal*` are linted away.
-- `context.TODO` is forbidden — always propagate a real context.
-- Imports are grouped: stdlib → third-party → local (`github.com/zekihan/external-secrets-sops`), enforced by `gci`.
-- Struct tags must be sorted and aligned per `.golangci.yaml` (`tagalign`).
-- `github.com/stretchr/testify` is banned — use `cmp` or standard library assertions in tests.
-- `os.Exit` is forbidden outside `main.go` and config initialization.
+Use structured `slog`, real propagated contexts, standard-library assertions (or cmp), and grouped imports: stdlib, third party, then local module. Sort and align struct tags. Keep `os.Exit` in main only. No mutable package globals apart from build metadata. Pin dependencies and tooling; validation targets must not rewrite files.

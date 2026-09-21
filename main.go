@@ -2,178 +2,77 @@ package main
 
 import (
 	"context"
-	"errors"
+	"flag"
 	"fmt"
+	"io"
 	"log/slog"
-	"net"
-	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
-	"strings"
 	"syscall"
-	"time"
 
-	"github.com/justinas/alice"
-	"github.com/zekihan/go-commons/environment"
-	"github.com/zekihan/go-commons/middleware"
-	"github.com/zekihan/go-commons/utils"
-	"github.com/zekihan/go-commons/web/errorroutes"
-	"github.com/zekihan/go-commons/web/health"
-	"github.com/zekihan/go-commons/web/ping"
-
-	"github.com/zekihan/external-secrets-sops/config"
-	"github.com/zekihan/external-secrets-sops/git"
-	"github.com/zekihan/external-secrets-sops/pubsub"
-	"github.com/zekihan/external-secrets-sops/routes/api"
-)
-
-const (
-	defaultTimeout  = 10 * time.Second
-	shutdownTimeout = 30 * time.Second
+	"github.com/zekihan/external-secrets-sops/internal/app"
+	"github.com/zekihan/external-secrets-sops/internal/config"
 )
 
 var (
-	stdChain, authChain alice.Chain
-	cfg                 *config.Config
+	version   = "dev"
+	commit    = "unknown"
+	buildDate = "unknown"
 )
 
-func init() {
-	err := environment.LoadEnvironmentFile()
-	if err != nil {
-		slog.ErrorContext(
-			context.Background(),
-			"Failed to load environment file",
-			slog.Any("error", err),
+func main() { os.Exit(run(os.Args[1:], os.Stdout, os.Stderr)) }
+func run(args []string, stdout, stderr io.Writer) int {
+	command := "serve"
+	if len(args) > 0 && len(args[0]) > 0 && args[0][0] != '-' {
+		command = args[0]
+		args = args[1:]
+	}
+	flags := flag.NewFlagSet(command, flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	filename := flags.String("config", "config.yaml", "configuration file")
+	if err := flags.Parse(args); err != nil {
+		return 2
+	}
+	if flags.NArg() != 0 {
+		return 2
+	}
+	switch command {
+	case "version":
+		_, _ = fmt.Fprintf(
+			stdout,
+			"external-secrets-sops %s (%s, %s)\n",
+			version,
+			commit,
+			buildDate,
 		)
-		os.Exit(1)
-	}
-
-	sopsAgeKeyFile := os.Getenv("SOPS_AGE_KEY_FILE")
-	if sopsAgeKeyFile != "" {
-		sopsAgeKeyFile = strings.Replace(sopsAgeKeyFile, "~", os.Getenv("HOME"), 1)
-
-		err = os.Setenv("SOPS_AGE_KEY_FILE", sopsAgeKeyFile)
-		if err != nil {
-			slog.ErrorContext(
-				context.Background(),
-				"Error setting SOPS_AGE_KEY_FILE environment variable",
-				slog.Any("error", err),
-			)
-			os.Exit(1)
-		}
-	}
-
-	// Init config.
-	cfg = config.GetConfig()
-
-	// Init logger.
-	loggerConfig := new(utils.LoggerConfig)
-	loggerConfig.Level = cfg.LogConfig.Level
-	loggerConfig.AddSource = cfg.LogConfig.AddSource
-	utils.InitLogger(loggerConfig)
-
-	// Init middleware.
-	stdChain = alice.New(middleware.RecoverHandler, middleware.Logging)
-	authChain = alice.New(
-		middleware.GetAuthMiddlewareForSingleAPIKey(config.GetConfig().WebConfig.APIKey),
-	)
-}
-
-func main() {
-	os.Exit(run())
-}
-
-func run() int {
-	slog.InfoContext(context.Background(), "Starting external secrets sops server")
-	utils.LogVersionInfo(context.Background())
-
-	cancelListenGithubEvents := pubsub.ListenGithubEvents()
-	defer cancelListenGithubEvents()
-
-	if cfg.GitConfig.RepoURL != "" {
-		cancelGitPullLoop := git.StartPullLoop()
-		defer cancelGitPullLoop()
-	} else {
-		slog.WarnContext(
-			context.Background(),
-			"Git repository URL is not configured, skipping git pulling",
+		return 0
+	case "serve", "check-config":
+	default:
+		_, _ = fmt.Fprintln(
+			stderr,
+			"usage: external-secrets-sops [serve|check-config|version] [--config path]",
 		)
+		return 2
 	}
-
-	err := runWebServer()
+	cfg, creds, err := config.Load(*filename, os.Getenv)
 	if err != nil {
-		slog.ErrorContext(context.Background(), "Server error", slog.Any("error", err))
-
+		_, _ = fmt.Fprintln(stderr, err)
 		return 1
 	}
-
+	if command == "check-config" {
+		_, _ = fmt.Fprintln(stdout, "Configuration valid")
+		return 0
+	}
+	var level slog.Level
+	if err = level.UnmarshalText([]byte(cfg.Server.LogLevel)); err != nil {
+		return 1
+	}
+	logger := slog.New(slog.NewJSONHandler(stderr, &slog.HandlerOptions{Level: level}))
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+	if err = app.Run(ctx, cfg, creds, logger); err != nil {
+		logger.ErrorContext(ctx, "Application failed", slog.Any("error", err))
+		return 1
+	}
 	return 0
-}
-
-func runWebServer() error {
-	// API routes.
-	http.HandleFunc("/api/ping", ping.GetPing)
-	http.HandleFunc("/api/health", health.GetHealth)
-	http.HandleFunc("/api/ready", api.GetReady)
-
-	// Git routes.
-	http.Handle("/git/lastCommit", authChain.ThenFunc(api.GetCommit))
-	http.Handle("/git/forceSync", authChain.ThenFunc(api.ForceSync))
-
-	// Secret routes.
-	http.Handle("/secret/{project}/{config}/{environment}", authChain.ThenFunc(api.GetAllSecret))
-	http.Handle("/secret/{project}/{config}/{environment}/{key}", authChain.ThenFunc(api.GetSecret))
-
-	// Error routes.
-	http.HandleFunc("/404", errorroutes.GetNotFound)
-	http.HandleFunc("/5xx", errorroutes.Get5xx)
-
-	// Redirect all other paths.
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		// Redirect all other paths to 404.
-		http.Redirect(w, r, "/404", http.StatusMovedPermanently)
-	})
-
-	port := config.GetConfig().WebConfig.Port
-	host := config.GetConfig().WebConfig.Host
-	addr := net.JoinHostPort(host, strconv.Itoa(port))
-	slog.InfoContext(context.Background(), "Starting server on http://"+addr)
-
-	srv := new(http.Server)
-	srv.Addr = addr
-	srv.Handler = stdChain.Then(http.DefaultServeMux)
-	srv.ReadTimeout = defaultTimeout
-	srv.WriteTimeout = defaultTimeout
-
-	serverErr := make(chan error, 1)
-
-	go func() {
-		err := srv.ListenAndServe()
-		if !errors.Is(err, http.ErrServerClosed) {
-			serverErr <- err
-		} else {
-			serverErr <- nil
-		}
-	}()
-
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
-	select {
-	case err := <-serverErr:
-		return err
-	case <-sigChan:
-		slog.InfoContext(context.Background(), "Shutdown signal received, stopping server")
-	}
-
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownTimeout)
-	defer shutdownCancel()
-
-	err := srv.Shutdown(shutdownCtx)
-	if err != nil {
-		return fmt.Errorf("graceful shutdown failed: %w", err)
-	}
-
-	return nil
 }
