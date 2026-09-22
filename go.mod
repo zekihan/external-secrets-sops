@@ -3,7 +3,7 @@ module github.com/zekihan/external-secrets-sops
 go 1.27.1
 
 require (
-	filippo.io/age v1.3.1
+	filippo.io/age v1.3.2
 	github.com/ProtonMail/go-crypto v1.4.1
 	github.com/getsops/sops/v3 v3.13.3
 	github.com/go-git/go-git/v5 v5.19.2
