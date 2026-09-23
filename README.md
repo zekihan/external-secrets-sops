@@ -48,7 +48,7 @@ SOPS' embedded API does not consistently support cancellation. An operation may 
 
 ## Development
 
-Install Redis server for integration tests, golangci-lint **2.13.2**, and GoReleaser **2.18.1** for release builds.
+Install Redis server for integration tests, golangci-lint **2.13.2**, and GoReleaser **2.18.2** for release builds.
 
 ```sh
 make fmt                 # explicit source formatting
