@@ -23,7 +23,6 @@ func TestRenderedChart(t *testing.T) {
 		wantRemoteEnvironment := cluster
 		if cluster == "prod" {
 			wantEnvironments = []string{"prod", "staging"}
-			wantRemoteEnvironment = "staging"
 		}
 		for _, enabled := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s-%t", cluster, enabled), func(t *testing.T) {
