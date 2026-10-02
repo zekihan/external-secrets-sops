@@ -7,7 +7,7 @@ git:
   cacheDir: /data/cache
 scope:
   projects: [example]
-  environments: [staging]
+  environments: [prod, staging]
 redis:
   enabled: true
   addresses: [redis:6379]
