@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -18,6 +19,12 @@ func TestRenderedChart(t *testing.T) {
 		t.Skip("set ESS_CHART_RENDER_DIR to validate the four rendered chart variants")
 	}
 	for _, cluster := range []string{"prod", "dev"} {
+		wantEnvironments := []string{cluster}
+		wantRemoteEnvironment := cluster
+		if cluster == "prod" {
+			wantEnvironments = []string{"prod", "staging"}
+			wantRemoteEnvironment = "staging"
+		}
 		for _, enabled := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s-%t", cluster, enabled), func(t *testing.T) {
 				name := fmt.Sprintf("%s-%t.yaml", cluster, enabled)
@@ -53,8 +60,7 @@ func TestRenderedChart(t *testing.T) {
 							t.Fatalf("rendered config invalid: %v", e)
 						}
 						if len(cfg.Scope.Projects) != 1 || cfg.Scope.Projects[0] != "example" ||
-							len(cfg.Scope.Environments) != 1 ||
-							cfg.Scope.Environments[0] != cluster ||
+							!slices.Equal(cfg.Scope.Environments, wantEnvironments) ||
 							cfg.Redis.Enabled != enabled {
 							t.Fatal("wrong rendered scope/Redis mode")
 						}
@@ -94,7 +100,9 @@ func TestRenderedChart(t *testing.T) {
 						if !ok {
 							continue
 						}
-						if !strings.Contains(webhook["url"].(string), "/v1/secrets/example/") ||
+						secretURL := webhook["url"].(string)
+						if !strings.Contains(secretURL, "/v1/secrets/example/") ||
+							!strings.HasSuffix(secretURL, "/"+wantRemoteEnvironment) ||
 							nested(webhook, "result")["jsonPath"] != "$.data" ||
 							!strings.HasPrefix(
 								nested(webhook, "headers")["Authorization"].(string),
