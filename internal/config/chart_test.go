@@ -18,7 +18,7 @@ func TestRenderedChart(t *testing.T) {
 	if dir == "" {
 		t.Skip("set ESS_CHART_RENDER_DIR to validate the four rendered chart variants")
 	}
-	for _, cluster := range []string{"prod", "dev"} {
+	for _, cluster := range []string{"prod", "staging"} {
 		wantEnvironments := []string{cluster}
 		wantRemoteEnvironment := cluster
 		for _, enabled := range []bool{false, true} {
