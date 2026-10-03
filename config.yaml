@@ -10,7 +10,7 @@ git:
   tokenEnv: ESS_GIT_TOKEN
 scope:
   projects: [example]
-  environments: [prod, staging]
+  environments: [prod]
 refresh:
   interval: 5m
   timeout: 2m
