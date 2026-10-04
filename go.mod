@@ -6,7 +6,7 @@ require (
 	filippo.io/age v1.3.2
 	github.com/ProtonMail/go-crypto v1.5.2
 	github.com/getsops/sops/v3 v3.13.3
-	github.com/go-git/go-git/v5 v5.19.2
+	github.com/go-git/go-git/v5 v5.19.3
 	github.com/redis/go-redis/v9 v9.22.0
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -69,7 +69,7 @@ require (
 	github.com/felixge/httpsnoop v1.1.0 // indirect
 	github.com/getsops/gopgagent v0.0.0-20241224165529-7044f28e491e // indirect
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
-	github.com/go-git/go-billy/v5 v5.9.1 // indirect
+	github.com/go-git/go-billy/v5 v5.9.2 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
@@ -108,7 +108,7 @@ require (
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
-	github.com/pjbgf/sha1cd v0.6.0 // indirect
+	github.com/pjbgf/sha1cd v0.7.0 // indirect
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20260702190614-8ae5a48058df // indirect
@@ -133,7 +133,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.45.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
-	golang.org/x/crypto v0.55.0 // indirect
+	golang.org/x/crypto v0.56.0 // indirect
 	golang.org/x/net v0.58.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
