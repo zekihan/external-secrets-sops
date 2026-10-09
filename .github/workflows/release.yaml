@@ -32,7 +32,7 @@ jobs:
       - name: Set up GoReleaser
         uses: goreleaser/goreleaser-action@v7.2.3
         with:
-          version: v2.18.2
+          version: v2.18.3
           install-only: true
 
       - name: Install build dependencies
