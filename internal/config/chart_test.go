@@ -18,12 +18,12 @@ func TestRenderedChart(t *testing.T) {
 	if dir == "" {
 		t.Skip("set ESS_CHART_RENDER_DIR to validate the four rendered chart variants")
 	}
-	for _, cluster := range []string{"prod", "staging"} {
-		wantEnvironments := []string{cluster}
-		wantRemoteEnvironment := cluster
+	for _, environment := range []string{"staging", "prod"} {
+		wantEnvironments := []string{environment}
+		wantRemoteEnvironment := environment
 		for _, enabled := range []bool{false, true} {
-			t.Run(fmt.Sprintf("%s-%t", cluster, enabled), func(t *testing.T) {
-				name := fmt.Sprintf("%s-%t.yaml", cluster, enabled)
+			t.Run(fmt.Sprintf("%s-%t", environment, enabled), func(t *testing.T) {
+				name := fmt.Sprintf("%s-%t.yaml", environment, enabled)
 				f, err := os.Open(filepath.Join(dir, name))
 				if err != nil {
 					t.Fatal(err)
