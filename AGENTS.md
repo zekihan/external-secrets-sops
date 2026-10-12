@@ -8,7 +8,7 @@
 - `make test`: normal and race tests, including disposable Redis integration tests.
 - `./scripts/go_test.sh -run TestName ./internal/...`: focused tests. Never invoke `go test` directly; the wrapper supplies the public fixture Age identity.
 - `make build`: local binary.
-- `make build/all`: snapshot release binaries (GoReleaser 2.18.2).
+- `make build/all`: snapshot release binaries (GoReleaser 2.18.3).
 
 ## Architecture
 

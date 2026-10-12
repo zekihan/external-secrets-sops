@@ -1,6 +1,6 @@
 GO := go
 GOLANGCI_LINT_VERSION := 2.14.0
-GORELEASER_VERSION := 2.18.2
+GORELEASER_VERSION := 2.18.3
 RELEASE_VERSION := $(shell cat VERSION)
 
 .PHONY: fmt tidy lint test test/cover build run audit build/local build/all build/release/all build/release/docker release check-tools check-release-tools
