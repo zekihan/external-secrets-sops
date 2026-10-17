@@ -4,7 +4,7 @@
 
 - `make fmt`: explicitly format Go source.
 - `make tidy`: explicitly update module dependencies.
-- `make lint`: non-mutating lint (golangci-lint 2.14.0).
+- `make lint`: non-mutating lint (golangci-lint 2.15.0).
 - `make test`: normal and race tests, including disposable Redis integration tests.
 - `./scripts/go_test.sh -run TestName ./internal/...`: focused tests. Never invoke `go test` directly; the wrapper supplies the public fixture Age identity.
 - `make build`: local binary.
