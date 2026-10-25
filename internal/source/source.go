@@ -191,17 +191,21 @@ func (r *Repository) Save(revision string, at time.Time) error {
 	return nil
 }
 
-func directory(tree *object.Tree, name string) (*object.Tree, error) {
-	entry, err := tree.FindEntry(name)
+func (b *treeBudget) directory(
+	ctx context.Context,
+	tree *object.Tree,
+	name string,
+) (*object.Tree, error) {
+	entry, err := b.lookup(ctx, tree, name)
 	if errors.Is(err, object.ErrEntryNotFound) {
 		return nil, nil
 	}
 	if err != nil || entry.Mode != filemode.Dir {
 		return nil, errors.New("selected path is not a regular directory")
 	}
-	sub, err := tree.Tree(name)
+	sub, err := b.load(ctx, entry.Hash)
 	if err != nil {
-		return nil, errors.New("cannot read selected directory")
+		return nil, err
 	}
 	return sub, nil
 }
@@ -214,13 +218,14 @@ func (r *Repository) Documents(ctx context.Context, revision string) ([]Document
 	if err != nil {
 		return nil, errors.New("cannot read selected commit")
 	}
-	tree, err := commit.Tree()
+	budget := treeBudget{r: r}
+	tree, err := budget.load(ctx, commit.TreeHash)
 	if err != nil {
-		return nil, errors.New("cannot read selected tree")
+		return nil, err
 	}
 	if r.cfg.Git.Root != "." {
 		for _, part := range strings.Split(r.cfg.Git.Root, "/") {
-			tree, err = directory(tree, part)
+			tree, err = budget.directory(ctx, tree, part)
 			if err != nil {
 				return nil, err
 			}
@@ -229,10 +234,24 @@ func (r *Repository) Documents(ctx context.Context, revision string) ([]Document
 			}
 		}
 	}
+	// Prepare the trusted scope once rather than allocating it per component.
+	envs := make([]string, 0, len(r.cfg.Scope.Environments)+1)
+	seen := make(map[string]bool)
+	for _, env := range r.cfg.Scope.Environments {
+		if !seen[env] {
+			envs = append(envs, env)
+			seen[env] = true
+		}
+	}
+	explicitBase := seen["base"]
+	if !explicitBase {
+		envs = append(envs, "base")
+	}
 	var docs []Document
 	var total int64
+	components := 0
 	for _, project := range r.cfg.Scope.Projects {
-		ptree, e := directory(tree, project)
+		ptree, e := budget.directory(ctx, tree, project)
 		if e != nil {
 			return nil, e
 		}
@@ -240,6 +259,9 @@ func (r *Repository) Documents(ctx context.Context, revision string) ([]Document
 			continue
 		}
 		for _, entry := range ptree.Entries {
+			if err = ctx.Err(); err != nil {
+				return nil, err
+			}
 			if !config.Component(entry.Name) {
 				return nil, errors.New("invalid config path")
 			}
@@ -247,43 +269,38 @@ func (r *Repository) Documents(ctx context.Context, revision string) ([]Document
 			if entry.Mode == filemode.Regular || entry.Mode == filemode.Executable {
 				continue
 			}
-			ctree, e := directory(ptree, entry.Name)
+			components++
+			if components > maxComponents {
+				return nil, errors.New("selected components exceed limit")
+			}
+			ctree, e := budget.directory(ctx, ptree, entry.Name)
 			if e != nil {
 				return nil, e
 			}
-			envs := append(append([]string{}, r.cfg.Scope.Environments...), "base")
-			explicitBase := false
-			for _, selected := range r.cfg.Scope.Environments {
-				if selected == "base" {
-					explicitBase = true
-				}
-			}
 			configStart := len(docs)
-			seen := map[string]bool{}
 			for _, env := range envs {
 				if env == "base" && !explicitBase && len(docs) == configStart {
 					continue
 				}
-				if seen[env] {
-					continue
-				}
-				seen[env] = true
 				if err = ctx.Err(); err != nil {
 					return nil, err
 				}
-				etree, e := directory(ctree, env)
+				etree, e := budget.directory(ctx, ctree, env)
 				if e != nil {
 					return nil, e
 				}
 				if etree == nil {
 					continue
 				}
-				file, e := etree.FindEntry("values.yaml")
+				file, e := budget.lookup(ctx, etree, "values.yaml")
 				if errors.Is(e, object.ErrEntryNotFound) {
 					continue
 				}
 				if e != nil || (file.Mode != filemode.Regular && file.Mode != filemode.Executable) {
 					return nil, errors.New("secret document must be a regular file")
+				}
+				if len(docs) >= maxDocuments {
+					return nil, errors.New("selected documents exceed limit")
 				}
 				blob, e := r.repo.BlobObject(file.Hash)
 				if e != nil {
