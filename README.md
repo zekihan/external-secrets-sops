@@ -65,3 +65,34 @@ The wrapper supplies only the public fixture Age identity. Tests never require p
 For Docker Compose, create `.env` containing the two API tokens and optional Git token, set `SOPS_AGE_KEY_FILE`, review `docs/compose-config.yaml`, and first run `make build/release/docker`. Compose uses a private Redis container without a host port. The image contains one application executable and the existing pinned runtime base.
 
 Version 2 replaces the v1 API and configuration completely. There are no compatibility aliases.
+
+### Bounded Git cache
+
+Each refresh requests only the configured branch tip at depth one into a fresh
+bare candidate. Servers must support shallow fetches. Fixed ceilings apply to the
+entire fetched tree, including unselected files: 64 MiB of pack transfer, 16,384
+objects, 16 MiB per inflated object or delta result, and 128 MiB combined inflated
+base objects, delta instructions, and declared delta results. HTTPS reference
+advertisements are limited to 1 MiB; protocol response bytes are also bounded.
+Pack checksums and object decoding remain mandatory. Size failures stop refresh
+before decryption and leave the validated marker and active snapshot unchanged.
+These ceilings may reject repositories that previously worked, even when their
+selected documents fit the configured document limits.
+
+Two fixed cache slots retain a validated generation and one candidate/previous
+generation. The marker switches atomically only after normal document validation;
+failed fetches remove their candidate. The next refresh replaces the inactive slot,
+so divergent tips and rejected candidates cannot accumulate packs or history.
+Each slot's file bytes are capped at 208 MiB including the temporary transfer;
+filesystem allocation and directory metadata add platform-dependent overhead.
+Use a dedicated cache directory per process/replica; concurrent writers sharing a
+cache directory are unsupported. A volume quota remains useful for metadata,
+filesystem failures, and other applications sharing the volume.
+
+Upgrades can restore an existing legacy bare cache offline. Successful refreshes
+use the new slots; legacy objects and previously quarantined `.invalid-*`
+directories are never extended but remain on disk. Operators should review and
+remove those legacy files separately after confirming recovery from a new slot.
+No automatic deletion of legacy diagnostic data occurs. Rollout sizing, legacy
+cleanup, and live repository authentication/availability acceptance require
+operator review; no trust, credential, or network policy changes are needed.
