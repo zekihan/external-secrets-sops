@@ -4,7 +4,7 @@ A Go HTTP provider for SOPS-encrypted secrets in Git. Each response comes from o
 
 ## Run
 
-Requires Go 1.27.1 to build. SOPS is embedded; no SOPS executable is required. Use standard SOPS credentials for Age, PGP, or cloud KMS. GnuPG-backed keyrings and external credential helpers require those executables in a customized image; in-process PGP keyrings do not.
+Requires the Go version pinned in `go.mod` to build. SOPS is embedded; no SOPS executable is required. Use standard SOPS credentials for local Age or PGP keys. GnuPG-backed keyrings and external credential helpers require those executables in a customized image; in-process PGP keyrings do not. Remote KMS/Vault backends and Age plugin recipients are rejected before credential discovery or key recovery.
 
 ```sh
 make build
@@ -35,6 +35,8 @@ Only configured projects/environments and their required base files are loaded. 
 Environment keys override base keys. Null removes a key; empty strings remain values. Strings, numbers, and booleans are returned as strings using the decrypted YAML scalar text. Nested values, sequences, duplicate keys, aliases, YAML merge keys, unsafe path components, symlinks, and submodules are rejected. A candidate with any invalid selected document, or no selected environment documents, never replaces the active snapshot.
 
 Default bounds are four decrypt workers, 1 MiB per encrypted/decrypted document, and 32 MiB per candidate (encrypted input, decrypted input, and merged values each checked). These are data limits, not a bound on total process memory or SOPS parsing allocations.
+
+SOPS metadata has fixed work limits: four key groups and sixteen total recipients per document, and 256 total recipients across the candidate. All selected documents pass metadata validation before any key recovery starts. Both legacy flat recipient lists and `key_groups` are supported; every fallback recipient counts. Only local Age (X25519, hybrid, SSH) and PGP recipients are accepted. Encrypted YAML must be a single mapping without aliases, anchors, duplicate keys, or merges, with nesting limited to 32 levels. A rejected candidate leaves the active snapshot intact. These limits bound recipient dispatch, not the duration of operator-configured local helpers.
 
 ## Updates and failures
 

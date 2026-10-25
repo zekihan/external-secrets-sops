@@ -19,6 +19,9 @@ func (SOPS) Decrypt(ctx context.Context, encrypted []byte) (plain []byte, err er
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	if err := (SOPS{}).ValidateCandidate(ctx, [][]byte{encrypted}); err != nil {
+		return nil, err
+	}
 	plain, err = decrypt.Data(encrypted, "yaml")
 	if err != nil {
 		return nil, errors.New("SOPS decryption or integrity verification failed")
