@@ -7,6 +7,7 @@ import (
 	"crypto/sha1"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -67,6 +68,7 @@ func TestPackPreflight(t *testing.T) {
 		{"large object header", packFixture(3, uint64(maxObjectBytes+1), nil), false},
 		{"large delta result", packFixture(7, uint64(len(delta)), delta), false},
 		{"malformed delta", packFixture(7, 1, []byte{128}), false},
+		{"underfilled object", packFixture(3, 3, []byte("a")), false},
 		{"inflated header mismatch", packFixture(3, 1, []byte("abc")), false},
 		{"object count", tooMany, false},
 		{"checksum", packFixture(3, 1, []byte("a"))[:20], false},
@@ -331,5 +333,44 @@ func TestSupportedDeltaPack(t *testing.T) {
 	expected := plumbing.ComputeHash(plumbing.BlobObject, []byte("hello!"))
 	if _, err = storage.EncodedObject(plumbing.BlobObject, expected); err != nil {
 		t.Fatal("delta content integrity", err)
+	}
+}
+
+// A malformed object expands to 64 MiB but declares only one byte. Limit
+// compressed input as well: eventual EOF/checksum rejection is insufficient.
+func TestUnderdeclaredPackRejectsBeforeInflatingTail(t *testing.T) {
+	var compressed bytes.Buffer
+	z := zlib.NewWriter(&compressed)
+	if _, err := io.CopyN(z, zeroReader{}, 64<<20); err != nil {
+		t.Fatal(err)
+	}
+	if err := z.Close(); err != nil {
+		t.Fatal(err)
+	}
+	for _, typ := range []byte{3, 7} {
+		var b bytes.Buffer
+		b.WriteString("PACK")
+		_ = binary.Write(&b, binary.BigEndian, uint32(2))
+		_ = binary.Write(&b, binary.BigEndian, uint32(1))
+		b.WriteByte(typ<<4 | 1)
+		if typ == 7 {
+			b.Write(make([]byte, 20))
+		}
+		b.Write(compressed.Bytes())
+		sum := sha1.Sum(b.Bytes())
+		b.Write(sum[:])
+		input := bytes.NewReader(b.Bytes())
+		err := checkPack(io.LimitReader(input, 8192))
+		if !errors.Is(err, packfile.ErrInflatedSizeMismatch) {
+			t.Fatalf("type %d: expected immediate inflation mismatch, got %v", typ, err)
+		}
+		if consumed := len(b.Bytes()) - input.Len(); consumed >= len(b.Bytes())/2 {
+			t.Fatalf(
+				"type %d consumed tail: %d of %d compressed bytes",
+				typ,
+				consumed,
+				len(b.Bytes()),
+			)
+		}
 	}
 }

@@ -201,8 +201,13 @@ func checkPack(r io.Reader) error {
 		}
 		total += h.Length
 		prefix := &prefixSink{}
-		if _, _, e = scanner.NextObject(prefix); e != nil {
+		// Pinned go-git bounds inflation at h.Length, including discarded bytes.
+		written, _, e := scanner.NextObject(prefix)
+		if e != nil {
 			return e
+		}
+		if written != h.Length {
+			return errors.New("git object inflated length mismatch")
 		}
 		if h.Type == plumbing.REFDeltaObject || h.Type == plumbing.OFSDeltaObject {
 			_, n := binary.Uvarint(prefix.data)
