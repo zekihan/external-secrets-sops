@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -13,7 +14,6 @@ import (
 	"time"
 
 	git "github.com/go-git/go-git/v5"
-	gitconfig "github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/filemode"
 	"github.com/go-git/go-git/v5/plumbing/object"
@@ -30,15 +30,18 @@ type Document struct {
 	Encrypted   []byte
 }
 type Marker struct {
+	Generation  string    `json:"generation,omitempty"`
 	Revision    string    `json:"revision"`
 	Fingerprint string    `json:"fingerprint"`
 	ValidatedAt time.Time `json:"validatedAt"`
 }
 type Repository struct {
-	cfg  config.Config
-	dir  string
-	auth transport.AuthMethod
-	repo *git.Repository
+	cfg     config.Config
+	dir     string
+	auth    transport.AuthMethod
+	repo    *git.Repository
+	stage   string
+	fetched string
 }
 
 func New(cfg config.Config, token string) (*Repository, error) {
@@ -53,68 +56,80 @@ func New(cfg config.Config, token string) (*Repository, error) {
 	return r, nil
 }
 
+// open also understands the pre-quota bare cache for offline upgrade recovery.
 func (r *Repository) open() error {
 	if r.repo != nil {
 		return nil
 	}
-	if err := os.MkdirAll(r.dir, 0o700); err != nil {
-		return errors.New("cannot create Git cache")
-	}
-	repo, err := git.PlainOpen(r.dir)
-	if errors.Is(err, git.ErrRepositoryNotExists) {
-		repo, err = git.PlainInit(r.dir, true)
-	}
+	m, err := r.marker()
 	if err != nil {
-		return errors.New("cannot open Git cache")
+		return err
 	}
-	remote, err := repo.Remote("origin")
-	if errors.Is(err, git.ErrRemoteNotFound) {
-		_, err = repo.CreateRemote(
-			&gitconfig.RemoteConfig{Name: "origin", URLs: []string{r.cfg.Git.URL}},
-		)
-	} else if err == nil && (len(remote.Config().URLs) != 1 || remote.Config().URLs[0] != r.cfg.Git.URL) {
-		return errors.New("git cache remote mismatch")
+	dir := r.dir
+	if m.Generation != "" {
+		dir = filepath.Join(r.dir, m.Generation)
 	}
+	r.repo, err = git.PlainOpen(dir)
 	if err != nil {
-		return errors.New("cannot configure Git cache")
+		return errors.New("cannot open validated Git cache")
 	}
-	r.repo = repo
+	if m.Generation == "" {
+		remote, e := r.repo.Remote("origin")
+		if e != nil || len(remote.Config().URLs) != 1 || remote.Config().URLs[0] != r.cfg.Git.URL {
+			r.repo = nil
+			return errors.New("git cache remote mismatch")
+		}
+	}
 	return nil
 }
 
-func (r *Repository) Fetch(ctx context.Context) (string, error) {
-	if err := r.open(); err != nil {
-		// Preserve an unreadable cache for diagnosis and recover into a fresh directory.
-		if renameErr := os.Rename(
-			r.dir,
-			r.dir+".invalid-"+time.Now().UTC().Format("20060102T150405.000000000"),
-		); renameErr != nil {
-			return "", err
-		}
-		r.repo = nil
-		if err = r.open(); err != nil {
-			return "", err
-		}
-	}
-	ref := plumbing.NewBranchReferenceName(r.cfg.Git.Branch)
-	spec := gitconfig.RefSpec("+" + ref.String() + ":refs/remotes/origin/selected")
-	err := r.repo.FetchContext(
-		ctx,
-		&git.FetchOptions{
-			RemoteName: "origin",
-			RefSpecs:   []gitconfig.RefSpec{spec},
-			Auth:       r.auth,
-			Force:      true,
-		},
-	)
-	if err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate) {
-		return "", errors.New("git fetch failed")
-	}
-	selected, err := r.repo.Reference("refs/remotes/origin/selected", true)
+func (r *Repository) marker() (Marker, error) {
+	var m Marker
+	f, err := os.Open(filepath.Join(r.dir, "validated.json"))
 	if err != nil {
-		return "", errors.New("configured branch is unavailable")
+		return m, fmt.Errorf("validated cache unavailable: %w", err)
 	}
-	return selected.Hash().String(), nil
+	defer func() { _ = f.Close() }()
+	b, err := io.ReadAll(io.LimitReader(f, 4097))
+	if err != nil || len(b) > 4096 || json.Unmarshal(b, &m) != nil ||
+		(m.Generation != "" && m.Generation != "slot-0" && m.Generation != "slot-1") {
+		return Marker{}, errors.New("validated cache metadata invalid")
+	}
+	return m, nil
+}
+
+func (r *Repository) Fetch(ctx context.Context) (string, error) {
+	// The serialized syncer is the only writer. Never write into the validated slot.
+	m, markerErr := r.marker()
+	if markerErr != nil && !errors.Is(markerErr, os.ErrNotExist) {
+		return "", errors.New("cannot identify validated Git cache")
+	}
+
+	slot := "slot-0"
+	if m.Generation == slot {
+		slot = "slot-1"
+	}
+	stage := filepath.Join(r.dir, slot)
+	r.repo = nil
+	r.stage = ""
+	r.fetched = ""
+	if err := os.MkdirAll(r.dir, 0o700); err != nil {
+		return "", errors.New("cannot create Git cache")
+	}
+	if err := os.RemoveAll(stage); err != nil {
+		return "", errors.New("cannot clear Git candidate")
+	}
+	repo, err := git.PlainInit(stage, true)
+	if err != nil {
+		return "", errors.New("cannot create Git candidate")
+	}
+	revision, err := r.fetchCandidate(ctx, repo, stage)
+	if err != nil {
+		_ = os.RemoveAll(stage)
+		return "", errors.New("bounded Git fetch failed")
+	}
+	r.repo, r.stage, r.fetched = repo, slot, revision
+	return revision, nil
 }
 
 func (r *Repository) Cached() (Marker, error) {
@@ -122,22 +137,20 @@ func (r *Repository) Cached() (Marker, error) {
 	if err := r.open(); err != nil {
 		return m, err
 	}
-	b, err := os.ReadFile(filepath.Join(r.dir, "validated.json"))
+	m, err := r.marker()
 	if err != nil {
-		return m, errors.New("validated cache unavailable")
+		return m, err
 	}
-	if json.Unmarshal(b, &m) != nil || m.Fingerprint != r.cfg.Fingerprint() ||
-		!plumbing.IsHash(m.Revision) ||
-		m.ValidatedAt.IsZero() ||
-		m.ValidatedAt.After(time.Now()) {
+	if m.Fingerprint != r.cfg.Fingerprint() || !plumbing.IsHash(m.Revision) ||
+		m.ValidatedAt.IsZero() || m.ValidatedAt.After(time.Now()) {
 		return Marker{}, errors.New("validated cache metadata invalid")
 	}
 	return m, nil
 }
 
 func (r *Repository) Save(revision string, at time.Time) error {
-	if r.repo == nil {
-		return errors.New("git cache is not open")
+	if r.repo == nil || r.stage == "" || revision != r.fetched {
+		return errors.New("git candidate is not available")
 	}
 	if err := r.repo.Storer.SetReference(
 		plumbing.NewHashReference("refs/ess/validated", plumbing.NewHash(revision)),
@@ -145,7 +158,12 @@ func (r *Repository) Save(revision string, at time.Time) error {
 		return errors.New("cannot retain validated Git revision")
 	}
 	b, err := json.Marshal(
-		Marker{Revision: revision, Fingerprint: r.cfg.Fingerprint(), ValidatedAt: at},
+		Marker{
+			Generation:  r.stage,
+			Revision:    revision,
+			Fingerprint: r.cfg.Fingerprint(),
+			ValidatedAt: at,
+		},
 	)
 	if err != nil {
 		return errors.New("cannot encode cache marker")
