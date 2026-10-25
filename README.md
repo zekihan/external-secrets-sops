@@ -20,6 +20,8 @@ Edit `config.yaml` first: its local Git path is an example, not an initialized r
 
 Operational settings come exclusively from strict YAML. Unknown fields and multiple YAML documents are rejected. Application credentials are named by `auth.readerTokenEnv`, `auth.adminTokenEnv`, `git.tokenEnv`, and `redis.passwordEnv`. The Git token is optional for public/local repositories; set the reference to an empty string to disable lookup. When Redis is enabled, a nonempty password reference requires the variable to be present. API tokens must be distinct, nonempty, and contain no whitespace. Restart after configuration or credential changes.
 
+Cleartext HTTP is allowed only on literal loopback IP listeners (for example `127.0.0.1:8080` or `[::1]:8080`). Wildcard, non-loopback, and hostname listeners require both `server.tlsCertFile` and `server.tlsKeyFile`; TLS uses version 1.2 or later. Certificate/key loading must succeed before listening. There is no plaintext trusted-proxy bypass. See [transport configuration](docs/operations.md#api-transport) before upgrading networked deployments.
+
 Only HTTPS repository URLs without embedded credentials, or explicit local filesystem paths, are supported. Git certificates are verified using the system trust store. No SSH transport or credential-bearing URL is accepted.
 
 See [API](docs/api.md), [operations](docs/operations.md), and the complete defaults in [config.yaml](config.yaml).
@@ -62,6 +64,6 @@ make build/all           # snapshot release binaries
 
 The wrapper supplies only the public fixture Age identity. Tests never require production credentials; PGP uses a dedicated checked-in test key. Integration tests start disposable Redis and HTTP listeners on loopback and use temporary local Git repositories.
 
-For Docker Compose, create `.env` containing the two API tokens and optional Git token, set `SOPS_AGE_KEY_FILE`, review `docs/compose-config.yaml`, and first run `make build/release/docker`. Compose uses a private Redis container without a host port. The image contains one application executable and the existing pinned runtime base.
+For Docker Compose, create `.env` containing the two API tokens and optional Git token, set `SOPS_AGE_KEY_FILE`, `ESS_TLS_CERT_FILE`, and `ESS_TLS_KEY_FILE` to existing credential/certificate paths, review `docs/compose-config.yaml`, and first run `make build/release/docker`. The API uses HTTPS even with a loopback host port because its container listener is non-loopback. Clients must trust the server certificate and use its matching DNS name or IP. Compose uses a private Redis container without a host port. The image contains one application executable and the existing pinned runtime base.
 
 Version 2 replaces the v1 API and configuration completely. There are no compatibility aliases.

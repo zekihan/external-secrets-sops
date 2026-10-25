@@ -10,6 +10,23 @@ A Kubernetes deployment can use `emptyDir` for the encrypted cache; it survives 
 
 A refresh deadline prevents late publication, but cannot forcibly stop embedded SOPS backend calls. Monitor `updating`, `lastAttempt`, and snapshot age to detect stuck operations. On termination the service stops new work, drains HTTP, and waits at most `server.shutdownTimeout`; Kubernetes termination grace should exceed that by ten seconds.
 
+## API transport
+
+HTTP listeners must use a literal loopback IP; hostnames (including `localhost`) are rejected for cleartext to avoid depending on DNS resolution. An empty host, `0.0.0.0`, `[::]`, and all other non-loopback addresses require native TLS:
+
+```yaml
+server:
+  address: 0.0.0.0:8080
+  tlsCertFile: /credentials/tls.crt
+  tlsKeyFile: /credentials/tls.key
+```
+
+Supply an existing PEM certificate chain and matching PEM private key through read-only mounts accessible to the process. Both fields are required together, even on loopback. Invalid or missing files fail startup before accepting connections. The minimum TLS version is 1.2; restart to reload renewed certificates. `check-config` checks transport settings but does not open certificate files; `serve` verifies them before listening.
+
+This changes existing wildcard/hostname plaintext deployments: configure TLS and update clients/probes to HTTPS before rollout. A host-loopback published Docker port does not make the container's wildcard listener loopback; the supplied Compose configuration now requires `ESS_TLS_CERT_FILE` and `ESS_TLS_KEY_FILE` mounts. Remote proxies must connect to the backend over TLS and verify its identity, or share its loopback network namespace. There is no trusted TLS-terminator plaintext exception. Authorization tokens, role separation, snapshot integrity, readiness and shutdown behavior remain required over either transport.
+
+Live acceptance requires separate deployment approval: confirm the certificate name and trust chain with each consumer, mount existing certificates, update HTTPS probes, verify authenticated reads and admin role separation, and check certificate renewal/restart procedures. No live deployment or trust-store changes are performed by local tests.
+
 ## Credentials and cloud providers
 
 For Age, mount the identity read-only and set `SOPS_AGE_KEY_FILE`. Other SOPS backends use their standard environment and credential discovery. Configure provider environment variables and read-only credential mounts in your deployment. Grant only the required identity permissions and add specific egress rules for private KMS endpoints. Configure workload identity token projection and cloud-provider identity explicitly when required.
