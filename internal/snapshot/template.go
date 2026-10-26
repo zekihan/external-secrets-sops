@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/zekihan/external-secrets-sops/internal/config"
 )
@@ -17,6 +18,30 @@ type address struct {
 	Key
 	name string
 }
+type resolutionError struct {
+	location address
+	cause    error
+}
+
+func (e *resolutionError) Error() string {
+	component := func(s string) string {
+		if len(s) > 128 {
+			return s[:128] + "..."
+		}
+		return s
+	}
+	return fmt.Sprintf(
+		"secret %q/%q/%q/%q: %v",
+		component(e.location.Project),
+		component(e.location.Config),
+		component(e.location.Environment),
+		component(e.location.name),
+		e.cause,
+	)
+}
+
+func (e *resolutionError) Unwrap() error { return e.cause }
+
 type resolved struct {
 	value  string
 	height int
@@ -36,6 +61,9 @@ func resolve(
 	raw map[Key]map[string]scalar,
 	limits config.Limits,
 ) (map[Key]map[string]string, int64, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, 0, err
+	}
 	r := resolver{
 		ctx:      ctx,
 		raw:      raw,
@@ -46,6 +74,9 @@ func resolve(
 	var addresses []address
 	data := make(map[Key]map[string]string, len(raw))
 	for k, values := range raw {
+		if err := ctx.Err(); err != nil {
+			return nil, 0, err
+		}
 		data[k] = make(map[string]string, len(values))
 		for name := range values {
 			addresses = append(addresses, address{k, name})
@@ -53,13 +84,16 @@ func resolve(
 	}
 	sort.Slice(addresses, func(i, j int) bool {
 		a, b := addresses[i], addresses[j]
-		return strings.Join(
-			[]string{a.Project, a.Config, a.Environment, a.name},
-			"/",
-		) < strings.Join(
-			[]string{b.Project, b.Config, b.Environment, b.name},
-			"/",
-		)
+		if a.Project != b.Project {
+			return a.Project < b.Project
+		}
+		if a.Config != b.Config {
+			return a.Config < b.Config
+		}
+		if a.Environment != b.Environment {
+			return a.Environment < b.Environment
+		}
+		return a.name < b.name
 	})
 	for _, a := range addresses {
 		v, err := r.value(a, 0)
@@ -68,20 +102,17 @@ func resolve(
 		}
 		data[a.Key][a.name] = v.value
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, 0, err
+	}
 	return data, r.size, nil
 }
 
 func (r *resolver) value(a address, depth int) (result resolved, err error) {
 	defer func() {
-		if err != nil {
-			err = fmt.Errorf(
-				"secret %q/%q/%q/%q: %w",
-				a.Project,
-				a.Config,
-				a.Environment,
-				a.name,
-				err,
-			)
+		var located *resolutionError
+		if err != nil && !errors.As(err, &located) {
+			err = &resolutionError{location: a, cause: err}
 		}
 	}()
 	if err = r.ctx.Err(); err != nil {
@@ -214,7 +245,7 @@ func parseReference(current Key, text string) (address, error) {
 			}
 		}
 		decoded, err := url.PathUnescape(p)
-		if err != nil || !config.Component(decoded) {
+		if err != nil || !utf8.ValidString(decoded) || !config.Component(decoded) {
 			return address{}, errors.New("invalid reference component")
 		}
 		parts[i] = decoded

@@ -62,7 +62,7 @@ Only documents in the configured scope at the same Git revision can be reference
 
 Base/environment merging and null deletion happen before resolution. Templates inherited into an environment use that environment's overrides. A descriptor replaces the entire inherited value. References may target other derived values; cycles and missing or deleted targets reject the candidate. Substituted values are never interpreted as template source.
 
-Reference components use percent-encoding for characters outside ASCII letters, digits, `-._~+`. Encode `%` as `%25`, spaces as `%20`, `|` as `%7C`, and braces as `%7B`/`%7D`; encode Unicode as UTF-8 bytes. Components are split before decoding and decoded exactly once. `+` remains a literal plus. Malformed escapes and decoded invalid path components are rejected. Within a template, `$${` emits literal `${`. Whitespace around an interpolation's reference or encoder is ignored; spaces in names must be encoded.
+Reference components use percent-encoding for characters outside ASCII letters, digits, `-._~+`. Encode `%` as `%25`, spaces as `%20`, `|` as `%7C`, and braces as `%7B`/`%7D`; encode Unicode as UTF-8 bytes. Components are split before decoding and decoded exactly once. `+` remains a literal plus. Malformed escapes, invalid UTF-8, and decoded invalid path components are rejected. Within a template, `$${` emits literal `${`. Whitespace around an interpolation's reference or encoder is ignored; spaces in names must be encoded.
 
 Each interpolation accepts at most one optional encoder:
 
@@ -84,7 +84,7 @@ No implicit encoding, loops, conditionals, encoder pipelines, external lookups, 
 
 All settings must be positive; zero does not disable a guard. Every reference in each resolved descriptor counts, including repeated references and cached targets. Each value is resolved once; cached dependency heights still count toward depth. Value limits apply to literals and derived outputs. Encoded output is checked incrementally, and `limits.snapshotBytes` also bounds aggregate keys and resolved values, including values being assembled.
 
-Any resolution failure rejects the entire candidate and preserves the previous snapshot subject to existing freshness rules. No prior snapshot means the service remains unready. Diagnostics identify locations without printing secret values or template bodies. Resolved plaintext is never persisted.
+Any resolution failure rejects the entire candidate and preserves the previous snapshot subject to existing freshness rules. No prior snapshot means the service remains unready. Diagnostics identify the failure location without printing secret values or template bodies; long location components are truncated and dependency chains do not multiply error output. Resolved plaintext is never persisted.
 
 ## Updates and failures
 

@@ -1,8 +1,11 @@
 package snapshot
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/url"
 	"strings"
 	"testing"
@@ -220,5 +223,76 @@ func TestTemplateScopeAndOverrides(t *testing.T) {
 		testutil.Plain{},
 	).Build(t.Context(), "r", time.Now(), docs); err == nil {
 		t.Fatal("outside project reference accepted")
+	}
+}
+
+func TestReferenceRejectsInvalidUTF8(t *testing.T) {
+	for _, text := range []string{"%FF", "%C0%AF", "%ED%A0%80", "project/%FF/dev/key"} {
+		if _, err := parseReference(Key{"project", "app", "dev"}, text); err == nil {
+			t.Errorf("accepted invalid UTF-8 reference %q", text)
+		}
+	}
+}
+
+func TestEmptyResolutionHonorsCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	for _, raw := range []map[Key]map[string]scalar{nil, {{"project", "app", "dev"}: {}}} {
+		if _, _, err := resolve(
+			ctx,
+			raw,
+			config.Defaults().Limits,
+		); !errors.Is(
+			err,
+			context.Canceled,
+		) {
+			t.Fatalf("error = %v, want cancellation", err)
+		}
+	}
+}
+
+func TestTemplateDiagnosticsAreBounded(t *testing.T) {
+	key := Key{"project", "app", "dev"}
+	values := make(map[string]scalar)
+	for i := range 8 {
+		name := fmt.Sprintf("key%d%s", i, strings.Repeat("x", 16384))
+		next := fmt.Sprintf("key%d%s", i+1, strings.Repeat("x", 16384))
+		values[name] = scalar{kind: "$ref", value: next}
+	}
+	_, _, err := resolve(
+		t.Context(),
+		map[Key]map[string]scalar{key: values},
+		config.Defaults().Limits,
+	)
+	if err == nil {
+		t.Fatal("missing target accepted")
+	}
+	if len(err.Error()) > 4096 {
+		t.Fatalf("diagnostic exceeded bound: %d bytes", len(err.Error()))
+	}
+	if !strings.Contains(err.Error(), "reference target unavailable") {
+		t.Fatal("lost failure reason")
+	}
+}
+
+func TestRejectTaggedOrAnchoredTemplateDocument(t *testing.T) {
+	for _, plain := range []string{
+		"!custom\nvalue: {$template: literal}\n",
+		"&root\nvalue: {$template: literal}\n",
+		"!!set\nvalue: null\n",
+	} {
+		if _, err := parse([]byte(plain)); err == nil {
+			t.Errorf("accepted tagged or anchored root: %q", plain)
+		}
+	}
+}
+
+func TestResolutionErrorPreservesCause(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	r := resolver{ctx: ctx}
+	_, err := r.value(address{Key{"project", "app", "dev"}, "value"}, 0)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("lost cancellation cause: %v", err)
 	}
 }

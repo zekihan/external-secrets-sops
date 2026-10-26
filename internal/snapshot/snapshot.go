@@ -85,6 +85,9 @@ func parse(data []byte) (map[string]scalar, error) {
 		return nil, errors.New("secret must be a flat mapping")
 	}
 	mapping := doc.Content[0]
+	if mapping.Tag != "!!map" || mapping.Anchor != "" {
+		return nil, errors.New("secret mapping must not contain tags or anchors")
+	}
 	out := make(map[string]scalar, len(mapping.Content)/2)
 	for i := 0; i < len(mapping.Content); i += 2 {
 		k, v := mapping.Content[i], mapping.Content[i+1]
