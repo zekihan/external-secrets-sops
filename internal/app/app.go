@@ -28,9 +28,9 @@ func Run(
 	if err != nil {
 		return err
 	}
-	listener, err := net.Listen("tcp", cfg.Server.Address)
+	listener, err := listen(cfg.Server)
 	if err != nil {
-		return errors.New("cannot listen on server address")
+		return err
 	}
 	defer func() { _ = listener.Close() }()
 	ctx, cancel := context.WithCancel(ctx)

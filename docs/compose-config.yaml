@@ -1,5 +1,7 @@
 server:
   address: 0.0.0.0:8080
+  tlsCertFile: /credentials/tls.crt
+  tlsKeyFile: /credentials/tls.key
 git:
   url: https://github.com/example/secrets.git
   branch: main
