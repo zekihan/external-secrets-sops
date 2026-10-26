@@ -33,6 +33,8 @@ type Server struct {
 	Address         string        `yaml:"address"`
 	LogLevel        string        `yaml:"logLevel"`
 	ShutdownTimeout time.Duration `yaml:"shutdownTimeout"`
+	TLSCertFile     string        `yaml:"tlsCertFile"`
+	TLSKeyFile      string        `yaml:"tlsKeyFile"`
 }
 type Git struct {
 	URL      string `yaml:"url"`
@@ -174,15 +176,30 @@ func Component(s string) bool {
 	return true
 }
 
-func (c Config) Validate() error {
-	_, port, err := net.SplitHostPort(c.Server.Address)
+func (s Server) Validate() error {
+	host, port, err := net.SplitHostPort(s.Address)
 	if err != nil {
 		return errors.New("server.address must be host:port")
 	}
 	if n, e := strconv.Atoi(port); e != nil || n < 0 || n > 65535 {
 		return errors.New("invalid server port")
 	}
-	if err = plumbing.NewBranchReferenceName(c.Git.Branch).Validate(); err != nil {
+	if (s.TLSCertFile == "") != (s.TLSKeyFile == "") {
+		return errors.New("server.tlsCertFile and server.tlsKeyFile must be configured together")
+	}
+	if s.TLSCertFile == "" && !net.ParseIP(host).IsLoopback() {
+		return errors.New(
+			"non-loopback server.address requires server.tlsCertFile and server.tlsKeyFile; HTTP requires a literal loopback IP",
+		)
+	}
+	return nil
+}
+
+func (c Config) Validate() error {
+	if err := c.Server.Validate(); err != nil {
+		return err
+	}
+	if err := plumbing.NewBranchReferenceName(c.Git.Branch).Validate(); err != nil {
 		return errors.New("invalid Git branch")
 	}
 	switch c.Server.LogLevel {

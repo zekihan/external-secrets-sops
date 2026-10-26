@@ -58,6 +58,10 @@ func (s *Store) Ready(now time.Time, maxAge time.Duration) bool {
 type Decrypter interface {
 	Decrypt(context.Context, []byte) ([]byte, error)
 }
+
+type candidateValidator interface {
+	ValidateCandidate(context.Context, [][]byte) error
+}
 type Builder struct {
 	cfg     config.Config
 	decrypt Decrypter
@@ -133,6 +137,15 @@ func (b *Builder) Build(
 ) (*Snapshot, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	if validator, ok := b.decrypt.(candidateValidator); ok {
+		encrypted := make([][]byte, len(docs))
+		for i := range docs {
+			encrypted[i] = docs[i].Encrypted
+		}
+		if err := validator.ValidateCandidate(ctx, encrypted); err != nil {
+			return nil, errors.New("secret candidate metadata rejected")
+		}
+	}
 	parsed := make([]map[string]scalar, len(docs))
 	jobs := make(chan int)
 	var wg sync.WaitGroup

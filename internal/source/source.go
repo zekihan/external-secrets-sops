@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -13,7 +14,6 @@ import (
 	"time"
 
 	git "github.com/go-git/go-git/v5"
-	gitconfig "github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/filemode"
 	"github.com/go-git/go-git/v5/plumbing/object"
@@ -30,15 +30,18 @@ type Document struct {
 	Encrypted   []byte
 }
 type Marker struct {
+	Generation  string    `json:"generation,omitempty"`
 	Revision    string    `json:"revision"`
 	Fingerprint string    `json:"fingerprint"`
 	ValidatedAt time.Time `json:"validatedAt"`
 }
 type Repository struct {
-	cfg  config.Config
-	dir  string
-	auth transport.AuthMethod
-	repo *git.Repository
+	cfg     config.Config
+	dir     string
+	auth    transport.AuthMethod
+	repo    *git.Repository
+	stage   string
+	fetched string
 }
 
 func New(cfg config.Config, token string) (*Repository, error) {
@@ -53,68 +56,80 @@ func New(cfg config.Config, token string) (*Repository, error) {
 	return r, nil
 }
 
+// open also understands the pre-quota bare cache for offline upgrade recovery.
 func (r *Repository) open() error {
 	if r.repo != nil {
 		return nil
 	}
-	if err := os.MkdirAll(r.dir, 0o700); err != nil {
-		return errors.New("cannot create Git cache")
-	}
-	repo, err := git.PlainOpen(r.dir)
-	if errors.Is(err, git.ErrRepositoryNotExists) {
-		repo, err = git.PlainInit(r.dir, true)
-	}
+	m, err := r.marker()
 	if err != nil {
-		return errors.New("cannot open Git cache")
+		return err
 	}
-	remote, err := repo.Remote("origin")
-	if errors.Is(err, git.ErrRemoteNotFound) {
-		_, err = repo.CreateRemote(
-			&gitconfig.RemoteConfig{Name: "origin", URLs: []string{r.cfg.Git.URL}},
-		)
-	} else if err == nil && (len(remote.Config().URLs) != 1 || remote.Config().URLs[0] != r.cfg.Git.URL) {
-		return errors.New("git cache remote mismatch")
+	dir := r.dir
+	if m.Generation != "" {
+		dir = filepath.Join(r.dir, m.Generation)
 	}
+	r.repo, err = git.PlainOpen(dir)
 	if err != nil {
-		return errors.New("cannot configure Git cache")
+		return errors.New("cannot open validated Git cache")
 	}
-	r.repo = repo
+	if m.Generation == "" {
+		remote, e := r.repo.Remote("origin")
+		if e != nil || len(remote.Config().URLs) != 1 || remote.Config().URLs[0] != r.cfg.Git.URL {
+			r.repo = nil
+			return errors.New("git cache remote mismatch")
+		}
+	}
 	return nil
 }
 
-func (r *Repository) Fetch(ctx context.Context) (string, error) {
-	if err := r.open(); err != nil {
-		// Preserve an unreadable cache for diagnosis and recover into a fresh directory.
-		if renameErr := os.Rename(
-			r.dir,
-			r.dir+".invalid-"+time.Now().UTC().Format("20060102T150405.000000000"),
-		); renameErr != nil {
-			return "", err
-		}
-		r.repo = nil
-		if err = r.open(); err != nil {
-			return "", err
-		}
-	}
-	ref := plumbing.NewBranchReferenceName(r.cfg.Git.Branch)
-	spec := gitconfig.RefSpec("+" + ref.String() + ":refs/remotes/origin/selected")
-	err := r.repo.FetchContext(
-		ctx,
-		&git.FetchOptions{
-			RemoteName: "origin",
-			RefSpecs:   []gitconfig.RefSpec{spec},
-			Auth:       r.auth,
-			Force:      true,
-		},
-	)
-	if err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate) {
-		return "", errors.New("git fetch failed")
-	}
-	selected, err := r.repo.Reference("refs/remotes/origin/selected", true)
+func (r *Repository) marker() (Marker, error) {
+	var m Marker
+	f, err := os.Open(filepath.Join(r.dir, "validated.json"))
 	if err != nil {
-		return "", errors.New("configured branch is unavailable")
+		return m, fmt.Errorf("validated cache unavailable: %w", err)
 	}
-	return selected.Hash().String(), nil
+	defer func() { _ = f.Close() }()
+	b, err := io.ReadAll(io.LimitReader(f, 4097))
+	if err != nil || len(b) > 4096 || json.Unmarshal(b, &m) != nil ||
+		(m.Generation != "" && m.Generation != "slot-0" && m.Generation != "slot-1") {
+		return Marker{}, errors.New("validated cache metadata invalid")
+	}
+	return m, nil
+}
+
+func (r *Repository) Fetch(ctx context.Context) (string, error) {
+	// The serialized syncer is the only writer. Never write into the validated slot.
+	m, markerErr := r.marker()
+	if markerErr != nil && !errors.Is(markerErr, os.ErrNotExist) {
+		return "", errors.New("cannot identify validated Git cache")
+	}
+
+	slot := "slot-0"
+	if m.Generation == slot {
+		slot = "slot-1"
+	}
+	stage := filepath.Join(r.dir, slot)
+	r.repo = nil
+	r.stage = ""
+	r.fetched = ""
+	if err := os.MkdirAll(r.dir, 0o700); err != nil {
+		return "", errors.New("cannot create Git cache")
+	}
+	if err := os.RemoveAll(stage); err != nil {
+		return "", errors.New("cannot clear Git candidate")
+	}
+	repo, err := git.PlainInit(stage, true)
+	if err != nil {
+		return "", errors.New("cannot create Git candidate")
+	}
+	revision, err := r.fetchCandidate(ctx, repo, stage)
+	if err != nil {
+		_ = os.RemoveAll(stage)
+		return "", errors.New("bounded Git fetch failed")
+	}
+	r.repo, r.stage, r.fetched = repo, slot, revision
+	return revision, nil
 }
 
 func (r *Repository) Cached() (Marker, error) {
@@ -122,22 +137,20 @@ func (r *Repository) Cached() (Marker, error) {
 	if err := r.open(); err != nil {
 		return m, err
 	}
-	b, err := os.ReadFile(filepath.Join(r.dir, "validated.json"))
+	m, err := r.marker()
 	if err != nil {
-		return m, errors.New("validated cache unavailable")
+		return m, err
 	}
-	if json.Unmarshal(b, &m) != nil || m.Fingerprint != r.cfg.Fingerprint() ||
-		!plumbing.IsHash(m.Revision) ||
-		m.ValidatedAt.IsZero() ||
-		m.ValidatedAt.After(time.Now()) {
+	if m.Fingerprint != r.cfg.Fingerprint() || !plumbing.IsHash(m.Revision) ||
+		m.ValidatedAt.IsZero() || m.ValidatedAt.After(time.Now()) {
 		return Marker{}, errors.New("validated cache metadata invalid")
 	}
 	return m, nil
 }
 
 func (r *Repository) Save(revision string, at time.Time) error {
-	if r.repo == nil {
-		return errors.New("git cache is not open")
+	if r.repo == nil || r.stage == "" || revision != r.fetched {
+		return errors.New("git candidate is not available")
 	}
 	if err := r.repo.Storer.SetReference(
 		plumbing.NewHashReference("refs/ess/validated", plumbing.NewHash(revision)),
@@ -145,7 +158,12 @@ func (r *Repository) Save(revision string, at time.Time) error {
 		return errors.New("cannot retain validated Git revision")
 	}
 	b, err := json.Marshal(
-		Marker{Revision: revision, Fingerprint: r.cfg.Fingerprint(), ValidatedAt: at},
+		Marker{
+			Generation:  r.stage,
+			Revision:    revision,
+			Fingerprint: r.cfg.Fingerprint(),
+			ValidatedAt: at,
+		},
 	)
 	if err != nil {
 		return errors.New("cannot encode cache marker")
@@ -173,17 +191,21 @@ func (r *Repository) Save(revision string, at time.Time) error {
 	return nil
 }
 
-func directory(tree *object.Tree, name string) (*object.Tree, error) {
-	entry, err := tree.FindEntry(name)
+func (b *treeBudget) directory(
+	ctx context.Context,
+	tree *object.Tree,
+	name string,
+) (*object.Tree, error) {
+	entry, err := b.lookup(ctx, tree, name)
 	if errors.Is(err, object.ErrEntryNotFound) {
 		return nil, nil
 	}
 	if err != nil || entry.Mode != filemode.Dir {
 		return nil, errors.New("selected path is not a regular directory")
 	}
-	sub, err := tree.Tree(name)
+	sub, err := b.load(ctx, entry.Hash)
 	if err != nil {
-		return nil, errors.New("cannot read selected directory")
+		return nil, err
 	}
 	return sub, nil
 }
@@ -196,13 +218,14 @@ func (r *Repository) Documents(ctx context.Context, revision string) ([]Document
 	if err != nil {
 		return nil, errors.New("cannot read selected commit")
 	}
-	tree, err := commit.Tree()
+	budget := treeBudget{r: r}
+	tree, err := budget.load(ctx, commit.TreeHash)
 	if err != nil {
-		return nil, errors.New("cannot read selected tree")
+		return nil, err
 	}
 	if r.cfg.Git.Root != "." {
 		for _, part := range strings.Split(r.cfg.Git.Root, "/") {
-			tree, err = directory(tree, part)
+			tree, err = budget.directory(ctx, tree, part)
 			if err != nil {
 				return nil, err
 			}
@@ -211,10 +234,24 @@ func (r *Repository) Documents(ctx context.Context, revision string) ([]Document
 			}
 		}
 	}
+	// Prepare the trusted scope once rather than allocating it per component.
+	envs := make([]string, 0, len(r.cfg.Scope.Environments)+1)
+	seen := make(map[string]bool)
+	for _, env := range r.cfg.Scope.Environments {
+		if !seen[env] {
+			envs = append(envs, env)
+			seen[env] = true
+		}
+	}
+	explicitBase := seen["base"]
+	if !explicitBase {
+		envs = append(envs, "base")
+	}
 	var docs []Document
 	var total int64
+	components := 0
 	for _, project := range r.cfg.Scope.Projects {
-		ptree, e := directory(tree, project)
+		ptree, e := budget.directory(ctx, tree, project)
 		if e != nil {
 			return nil, e
 		}
@@ -222,6 +259,9 @@ func (r *Repository) Documents(ctx context.Context, revision string) ([]Document
 			continue
 		}
 		for _, entry := range ptree.Entries {
+			if err = ctx.Err(); err != nil {
+				return nil, err
+			}
 			if !config.Component(entry.Name) {
 				return nil, errors.New("invalid config path")
 			}
@@ -229,43 +269,38 @@ func (r *Repository) Documents(ctx context.Context, revision string) ([]Document
 			if entry.Mode == filemode.Regular || entry.Mode == filemode.Executable {
 				continue
 			}
-			ctree, e := directory(ptree, entry.Name)
+			components++
+			if components > maxComponents {
+				return nil, errors.New("selected components exceed limit")
+			}
+			ctree, e := budget.directory(ctx, ptree, entry.Name)
 			if e != nil {
 				return nil, e
 			}
-			envs := append(append([]string{}, r.cfg.Scope.Environments...), "base")
-			explicitBase := false
-			for _, selected := range r.cfg.Scope.Environments {
-				if selected == "base" {
-					explicitBase = true
-				}
-			}
 			configStart := len(docs)
-			seen := map[string]bool{}
 			for _, env := range envs {
 				if env == "base" && !explicitBase && len(docs) == configStart {
 					continue
 				}
-				if seen[env] {
-					continue
-				}
-				seen[env] = true
 				if err = ctx.Err(); err != nil {
 					return nil, err
 				}
-				etree, e := directory(ctree, env)
+				etree, e := budget.directory(ctx, ctree, env)
 				if e != nil {
 					return nil, e
 				}
 				if etree == nil {
 					continue
 				}
-				file, e := etree.FindEntry("values.yaml")
+				file, e := budget.lookup(ctx, etree, "values.yaml")
 				if errors.Is(e, object.ErrEntryNotFound) {
 					continue
 				}
 				if e != nil || (file.Mode != filemode.Regular && file.Mode != filemode.Executable) {
 					return nil, errors.New("secret document must be a regular file")
+				}
+				if len(docs) >= maxDocuments {
+					return nil, errors.New("selected documents exceed limit")
 				}
 				blob, e := r.repo.BlobObject(file.Hash)
 				if e != nil {
