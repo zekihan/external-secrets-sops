@@ -29,3 +29,6 @@ limits:
   decryptWorkers: 4
   documentBytes: 1048576
   snapshotBytes: 33554432
+  templateDepth: 32
+  templateValueBytes: 1048576
+  templateEvaluations: 100000

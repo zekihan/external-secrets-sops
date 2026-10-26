@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"maps"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -64,6 +66,7 @@ type Builder struct {
 func NewBuilder(cfg config.Config, d Decrypter) *Builder { return &Builder{cfg: cfg, decrypt: d} }
 
 type scalar struct {
+	kind   string
 	value  string
 	remove bool
 }
@@ -92,8 +95,20 @@ func parse(data []byte) (map[string]scalar, error) {
 		if _, ok := out[k.Value]; ok {
 			return nil, errors.New("duplicate secret key")
 		}
-		if v.Kind != yaml.ScalarNode || k.Anchor != "" || v.Anchor != "" {
-			return nil, errors.New("secret values must be scalars without aliases")
+		if k.Anchor != "" || v.Anchor != "" {
+			return nil, errors.New("secret values must not contain anchors or aliases")
+		}
+		if v.Kind == yaml.MappingNode && v.Tag == "!!map" && len(v.Content) == 2 {
+			field, value := v.Content[0], v.Content[1]
+			if field.Kind != yaml.ScalarNode || field.Tag != "!!str" || field.Anchor != "" ||
+				(field.Value != "$ref" && field.Value != "$template") || value.Kind != yaml.ScalarNode || value.Tag != "!!str" || value.Anchor != "" {
+				return nil, errors.New("invalid secret descriptor")
+			}
+			out[k.Value] = scalar{kind: field.Value, value: value.Value}
+			continue
+		}
+		if v.Kind != yaml.ScalarNode {
+			return nil, errors.New("invalid secret value")
 		}
 		switch v.Tag {
 		case "!!str", "!!bool", "!!int", "!!float":
@@ -154,7 +169,15 @@ func (b *Builder) Build(
 				}
 				values, err := parse(plain)
 				if err != nil {
-					fail(err)
+					fail(
+						fmt.Errorf(
+							"secret document %q/%q/%q: %w",
+							docs[i].Project,
+							docs[i].Config,
+							docs[i].Environment,
+							err,
+						),
+					)
 					continue
 				}
 				parsed[i] = values
@@ -185,7 +208,7 @@ send:
 		}
 		raw[k] = parsed[i]
 	}
-	data := make(map[Key]map[string]string)
+	mergedData := make(map[Key]map[string]scalar)
 	for k, values := range raw {
 		allowed := false
 		for _, env := range b.cfg.Scope.Environments {
@@ -193,16 +216,16 @@ send:
 				allowed = true
 			}
 		}
-		if !allowed {
+		if !allowed || !slices.Contains(b.cfg.Scope.Projects, k.Project) {
 			continue
 		}
-		merged := make(map[string]string)
+		merged := make(map[string]scalar)
 		apply := func(v map[string]scalar) {
 			for name, s := range v {
 				if s.remove {
 					delete(merged, name)
 				} else {
-					merged[name] = s.value
+					merged[name] = s
 				}
 			}
 		}
@@ -210,19 +233,14 @@ send:
 			apply(raw[Key{k.Project, k.Config, "base"}])
 		}
 		apply(values)
-		data[k] = merged
+		mergedData[k] = merged
 	}
-	if len(data) == 0 {
+	if len(mergedData) == 0 {
 		return nil, errors.New("no selected environment documents")
 	}
-	var size int64
-	for _, values := range data {
-		for k, v := range values {
-			size += int64(len(k) + len(v))
-		}
-	}
-	if size > b.cfg.Limits.SnapshotBytes {
-		return nil, errors.New("merged snapshot exceeds size limit")
+	data, size, err := resolve(ctx, mergedData, b.cfg.Limits)
+	if err != nil {
+		return nil, err
 	}
 	return &Snapshot{revision: revision, validatedAt: at, data: data, bytes: size}, nil
 }

@@ -66,10 +66,14 @@ type Auth struct {
 	AdminTokenEnv  string `yaml:"adminTokenEnv"`
 }
 type Limits struct {
-	DecryptWorkers int   `yaml:"decryptWorkers"`
-	DocumentBytes  int64 `yaml:"documentBytes"`
-	SnapshotBytes  int64 `yaml:"snapshotBytes"`
+	DecryptWorkers      int   `yaml:"decryptWorkers"`
+	DocumentBytes       int64 `yaml:"documentBytes"`
+	SnapshotBytes       int64 `yaml:"snapshotBytes"`
+	TemplateDepth       int   `yaml:"templateDepth"`
+	TemplateEvaluations int   `yaml:"templateEvaluations"`
+	TemplateValueBytes  int64 `yaml:"templateValueBytes"`
 }
+
 type Credentials struct {
 	Reader string
 	Admin  string
@@ -101,8 +105,15 @@ func Defaults() Config {
 			PasswordEnv: "ESS_REDIS_PASSWORD",
 			Channel:     "ess:github-events",
 		},
-		Auth:   Auth{ReaderTokenEnv: "ESS_READER_TOKEN", AdminTokenEnv: "ESS_ADMIN_TOKEN"},
-		Limits: Limits{DecryptWorkers: 4, DocumentBytes: 1 << 20, SnapshotBytes: 32 << 20},
+		Auth: Auth{ReaderTokenEnv: "ESS_READER_TOKEN", AdminTokenEnv: "ESS_ADMIN_TOKEN"},
+		Limits: Limits{
+			DecryptWorkers:      4,
+			DocumentBytes:       1 << 20,
+			SnapshotBytes:       32 << 20,
+			TemplateDepth:       32,
+			TemplateValueBytes:  1 << 20,
+			TemplateEvaluations: 100000,
+		},
 	}
 }
 
@@ -221,6 +232,13 @@ func (c Config) Validate() error {
 	if c.Limits.DecryptWorkers < 1 || c.Limits.DecryptWorkers > 64 || c.Limits.DocumentBytes < 1 ||
 		c.Limits.SnapshotBytes < c.Limits.DocumentBytes {
 		return errors.New("invalid document, snapshot or worker limits")
+	}
+	if c.Limits.TemplateDepth < 1 || c.Limits.TemplateDepth > 128 ||
+		c.Limits.TemplateValueBytes < 1 ||
+		c.Limits.TemplateValueBytes > 16<<20 ||
+		c.Limits.TemplateEvaluations < 1 ||
+		c.Limits.TemplateEvaluations > 1000000 {
+		return errors.New("invalid template limits")
 	}
 	if c.Redis.Enabled && (len(c.Redis.Addresses) == 0 || c.Redis.Channel == "" || c.Redis.DB < 0) {
 		return errors.New("invalid Redis configuration")

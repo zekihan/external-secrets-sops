@@ -68,6 +68,19 @@ func TestRefreshAndRestore(t *testing.T) {
 	if store.Load() != first {
 		t.Fatal("failed revision replaced snapshot")
 	}
+	for _, plain := range []string{
+		"a: {$ref: missing}",
+		"a: {$template: '${a}'}",
+		"a: {$template: 'SECRET_CANARY${missing}'}",
+	} {
+		src.docs[0].Encrypted = []byte(plain)
+		if err := w.refresh(t.Context()); err == nil {
+			t.Fatal("invalid template revision accepted")
+		}
+		if store.Load() != first || src.marker.Revision != "one" {
+			t.Fatal("failed template changed active snapshot or cache marker")
+		}
+	}
 	src.err = errors.New("SECRET_CANARY")
 	if err := w.refresh(t.Context()); err == nil {
 		t.Fatal("fetch failure ignored")

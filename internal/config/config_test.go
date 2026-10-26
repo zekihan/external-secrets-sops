@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -52,6 +53,34 @@ func TestValidation(t *testing.T) {
 		c.Git.URL = u
 		if err := c.Validate(); err == nil || strings.Contains(err.Error(), "secret") {
 			t.Fatal("URL validation failed")
+		}
+	}
+}
+
+func TestTemplateLimitConfiguration(t *testing.T) {
+	for _, tt := range []struct {
+		field  string
+		values []int64
+	}{
+		{"templateDepth", []int64{0, -1, 1, 32, 128, 129}},
+		{"templateValueBytes", []int64{0, -1, 1, 1 << 20, 16 << 20, (16 << 20) + 1}},
+		{"templateEvaluations", []int64{0, -1, 1, 100000, 1000000, 1000001}},
+	} {
+		for i, value := range tt.values {
+			path := filepath.Join(t.TempDir(), "config.yaml")
+			text := fmt.Sprintf(
+				"git:\n  url: ./repo\nscope:\n  projects: [p]\n  environments: [dev]\nlimits:\n  %s: %d\n",
+				tt.field,
+				value,
+			)
+			if err := os.WriteFile(path, []byte(text), 0600); err != nil {
+				t.Fatal(err)
+			}
+			_, _, err := Load(path, func(name string) string { return name })
+			valid := i >= 2 && i <= 4
+			if (err == nil) != valid {
+				t.Fatalf("%s=%d: %v", tt.field, value, err)
+			}
 		}
 	}
 }
