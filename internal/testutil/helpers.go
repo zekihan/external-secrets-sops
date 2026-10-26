@@ -37,20 +37,29 @@ type Plain struct{}
 func (Plain) Decrypt(ctx context.Context, b []byte) ([]byte, error) { return b, ctx.Err() }
 func Encrypt(t testing.TB, plain string) []byte {
 	t.Helper()
+	return EncryptGroups(t, plain, 1)
+}
+
+func EncryptGroups(t testing.TB, plain string, count int) []byte {
+	t.Helper()
 	store := yamlstore.NewStore(&sopsconfig.YAMLStoreConfig{Indent: 2})
 	branches, err := store.LoadPlainFile([]byte(plain))
 	if err != nil {
 		t.Fatal(err)
 	}
-	key, err := age.MasterKeyFromRecipient(
-		"age17jc9ncn8vpajqjq3sfcpuyp30netw68qm3jnmez6asngdeg0zd6qcqv2nd",
-	)
-	if err != nil {
-		t.Fatal(err)
+	groups := make([]sops.KeyGroup, count)
+	for i := range groups {
+		key, keyErr := age.MasterKeyFromRecipient(
+			"age17jc9ncn8vpajqjq3sfcpuyp30netw68qm3jnmez6asngdeg0zd6qcqv2nd",
+		)
+		if keyErr != nil {
+			t.Fatal(keyErr)
+		}
+		groups[i] = sops.KeyGroup{key}
 	}
 	tree := sops.Tree{
 		Branches: branches,
-		Metadata: sops.Metadata{KeyGroups: []sops.KeyGroup{{key}}, Version: "3.13.3"},
+		Metadata: sops.Metadata{KeyGroups: groups, Version: "3.13.3"},
 	}
 	dataKey, errs := tree.GenerateDataKey()
 	if len(errs) != 0 {
