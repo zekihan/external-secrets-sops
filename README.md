@@ -2,9 +2,11 @@
 
 A Go HTTP provider for SOPS-encrypted secrets in Git. Each response comes from one validated, immutable Git revision. Designed for the External Secrets Operator webhook provider and standalone HTTP clients.
 
+> **BREAKING CHANGE: networked API listeners now require native TLS.** Wildcard, hostname and other non-loopback HTTP listeners fail startup until `server.tlsCertFile` and `server.tlsKeyFile` point to mounted certificate/key files. Ingress TLS termination alone is insufficient. Before deployment, migrate ESO webhook consumers and probes to HTTPS, validate Traefik's HTTPS upstream certificate chain and server name, arrange a restart after certificate renewal, and bootstrap certificates, trust and credentials independently of this provider. Source merge does not perform or authorize that migration. See the [required transport rollout steps](docs/operations.md#api-transport).
+
 ## Run
 
-Requires Go 1.27.1 to build. SOPS is embedded; no SOPS executable is required. Use standard SOPS credentials for Age, PGP, or cloud KMS. GnuPG-backed keyrings and external credential helpers require those executables in a customized image; in-process PGP keyrings do not.
+Requires the Go version pinned in `go.mod` to build. SOPS is embedded; no SOPS executable is required. Use standard SOPS credentials for local Age or PGP keys. GnuPG-backed keyrings and external credential helpers require those executables in a customized image; in-process PGP keyrings do not. Remote KMS/Vault backends and Age plugin recipients are rejected before credential discovery or key recovery.
 
 ```sh
 make build
@@ -38,6 +40,10 @@ Environment keys override base keys. Null removes a key; empty strings remain va
 
 Default bounds are four decrypt workers, 1 MiB per encrypted/decrypted document, and 32 MiB per candidate (encrypted input, decrypted input, and merged values each checked). These are data limits, not a bound on total process memory or SOPS parsing allocations.
 
+SOPS metadata has fixed work limits: four key groups and sixteen total recipients per document, and 256 total recipients across the candidate. All selected documents pass metadata validation before any key recovery starts. Both legacy flat recipient lists and `key_groups` are supported; every fallback recipient counts. Only local Age (X25519, hybrid, SSH) and PGP recipients are accepted. Encrypted YAML must be a single mapping without aliases, anchors, duplicate keys, or merges, with nesting limited to 32 levels. A rejected candidate leaves the active snapshot intact. These limits bound recipient dispatch, not the duration of operator-configured local helpers.
+
+Git selection also has fixed per-candidate safety ceilings: 1 MiB and 16,384 entries per decoded tree; 16 MiB, 65,536 entries, and 16,384 tree loads across the traversal; 4,096 selected component directories and 4,096 documents. Repeated tree references consume the budget again, including directories with no `values.yaml`. Each lookup charges the tree entry count plus one against a 33,554,432-unit work budget, so unsorted trees and missing paths remain bounded. Tree entry headers must fit in 4 KiB. Trees are size-checked before materialization and entry-counted before decoding; exceeding a ceiling rejects the entire candidate before decryption/publication. These bounds apply to local selection after fetching, and do not bound Git transfer, pack/delta processing, or total process memory.
+
 ## Updates and failures
 
 One worker serializes startup, polling, manual refresh, and Redis triggers. Repeated triggers during an update coalesce into one subsequent pass. Polling defaults to five minutes with ±10% jitter; failures retry from five seconds up to five minutes. Redis reconnects independently and requests a refresh after reconnecting. Notifications carry no secret data.
@@ -67,3 +73,34 @@ The wrapper supplies only the public fixture Age identity. Tests never require p
 For Docker Compose, create `.env` containing the two API tokens and optional Git token, set `SOPS_AGE_KEY_FILE`, `ESS_TLS_CERT_FILE`, and `ESS_TLS_KEY_FILE` to existing credential/certificate paths, review `docs/compose-config.yaml`, and first run `make build/release/docker`. The API uses HTTPS even with a loopback host port because its container listener is non-loopback. Clients must trust the server certificate and use its matching DNS name or IP. Compose uses a private Redis container without a host port. The image contains one application executable and the existing pinned runtime base.
 
 Version 2 replaces the v1 API and configuration completely. There are no compatibility aliases.
+
+### Bounded Git cache
+
+Each refresh requests only the configured branch tip at depth one into a fresh
+bare candidate. Servers must support shallow fetches. Fixed ceilings apply to the
+entire fetched tree, including unselected files: 64 MiB of pack transfer, 16,384
+objects, 16 MiB per inflated object or delta result, and 128 MiB combined inflated
+base objects, delta instructions, and declared delta results. HTTPS reference
+advertisements are limited to 1 MiB; protocol response bytes are also bounded.
+Pack checksums and object decoding remain mandatory. Size failures stop refresh
+before decryption and leave the validated marker and active snapshot unchanged.
+These ceilings may reject repositories that previously worked, even when their
+selected documents fit the configured document limits.
+
+Two fixed cache slots retain a validated generation and one candidate/previous
+generation. The marker switches atomically only after normal document validation;
+failed fetches remove their candidate. The next refresh replaces the inactive slot,
+so divergent tips and rejected candidates cannot accumulate packs or history.
+Each slot's file bytes are capped at 208 MiB including the temporary transfer;
+filesystem allocation and directory metadata add platform-dependent overhead.
+Use a dedicated cache directory per process/replica; concurrent writers sharing a
+cache directory are unsupported. A volume quota remains useful for metadata,
+filesystem failures, and other applications sharing the volume.
+
+Upgrades can restore an existing legacy bare cache offline. Successful refreshes
+use the new slots; legacy objects and previously quarantined `.invalid-*`
+directories are never extended but remain on disk. Operators should review and
+remove those legacy files separately after confirming recovery from a new slot.
+No automatic deletion of legacy diagnostic data occurs. Rollout sizing, legacy
+cleanup, and live repository authentication/availability acceptance require
+operator review; no trust, credential, or network policy changes are needed.

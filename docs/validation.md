@@ -29,4 +29,4 @@ SOPS_AGE_KEY_FILE="$PWD/testdata/key.txt" /usr/bin/time -l ./tmp/snapshot.test \
   -test.run '^$' -test.bench BenchmarkEncryptedCandidate -test.benchtime=10x -test.benchmem
 ```
 
-Live cloud KMS, container runtime behavior, and cluster deployment are outside this local validation. SOPS backend credential discovery is delegated to the pinned upstream library. Publish/verify the new image and pin its actual digest before deployment.
+SOPS policy tests use synthetic remote metadata, a loopback HTTP trap with a fixture Vault token, and public local Age/PGP keys. They cover flat/grouped backend rejection before key recovery, recipient/group/candidate budgets, ambiguous YAML, Age plugin rejection, MAC tampering, missing/wrong identities, and retaining the active snapshot after candidate rejection. Remote backends are disabled; no live cloud KMS calls are needed. Local helper cancellation, container runtime behavior, scoped production recipient compatibility, and cluster deployment remain outside this local validation. Publish/verify the new image and pin its actual digest before deployment.
