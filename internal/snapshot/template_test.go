@@ -296,3 +296,56 @@ func TestResolutionErrorPreservesCause(t *testing.T) {
 		t.Fatalf("lost cancellation cause: %v", err)
 	}
 }
+
+func TestMissingReferencesDoNotExposeDescriptorContents(t *testing.T) {
+	for _, plain := range []string{
+		"output: {$ref: PRIVATE_REFERENCE_CANARY}",
+		"output: {$template: '${PRIVATE_REFERENCE_CANARY}'}",
+		"output: {$ref: project/PRIVATE_REFERENCE_CANARY/prod/key}",
+		"output: {$ref: intermediate}\nintermediate: {$ref: PRIVATE_REFERENCE_CANARY}",
+	} {
+		cfg := testutil.Config(t)
+		_, err := NewBuilder(
+			cfg,
+			testutil.Plain{},
+		).Build(t.Context(), "r", time.Now(), []source.Document{doc("dev", plain)})
+		if err == nil {
+			t.Fatal("missing reference accepted")
+		}
+		if strings.Contains(err.Error(), "PRIVATE_REFERENCE_CANARY") {
+			t.Fatal("missing reference disclosed descriptor contents")
+		}
+		if !strings.Contains(err.Error(), "reference target unavailable") {
+			t.Fatal("failure reason missing")
+		}
+		if !strings.Contains(err.Error(), `"output"`) &&
+			!strings.Contains(err.Error(), `"intermediate"`) {
+			t.Fatal("source location missing")
+		}
+	}
+}
+
+func TestEncodersStopAtOutputLimit(t *testing.T) {
+	for _, encoder := range []string{"base64", "json", "urlquery", "urlpath", "urluserinfo"} {
+		t.Run(encoder, func(t *testing.T) {
+			value := strings.Repeat("\"雪 /", 2048)
+			sentinel := errors.New("output limit")
+			size := 0
+			failed := false
+			err := encode(value, encoder, func(part string) error {
+				if failed {
+					t.Fatal("encoder continued after output limit")
+				}
+				if size+len(part) > 4096 {
+					failed = true
+					return sentinel
+				}
+				size += len(part)
+				return nil
+			})
+			if !errors.Is(err, sentinel) {
+				t.Fatalf("output limit not propagated: %v", err)
+			}
+		})
+	}
+}

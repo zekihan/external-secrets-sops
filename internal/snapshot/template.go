@@ -162,6 +162,11 @@ func (r *resolver) value(a address, depth int) (result resolved, err error) {
 		if e != nil {
 			return e
 		}
+		// A missing target is descriptor content, not an existing secret location.
+		// Attribute the failure to the source instead of echoing the reference.
+		if _, exists := r.raw[target.Key][target.name]; !exists {
+			return errors.New("reference target unavailable")
+		}
 		v, e := r.value(target, depth+1)
 		if e != nil {
 			return e
