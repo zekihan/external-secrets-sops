@@ -39,6 +39,8 @@ jobs:
           else
             echo "No build dependencies script found, skipping."
           fi
+      - name: Test
+        run: make test
       - name: Make build
         run: |
           make release

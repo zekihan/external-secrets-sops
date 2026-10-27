@@ -49,9 +49,18 @@ build/release/docker: check-release-tools
 	goreleaser build --clean --id docker --skip=validate
 
 release: check-release-tools
+	@test "$$(git describe --exact-match --tags HEAD)" = "v$(RELEASE_VERSION)" || (echo "Release tag must match VERSION" && exit 1)
+	goreleaser release --clean --skip=publish,announce
+	python3 scripts/check_release.py dist --version "$(RELEASE_VERSION)" --commit "$$(git rev-parse HEAD)"
 	goreleaser release --clean
 
 # Requires Linux binaries from build/all or build/release/docker and a local Docker engine.
 .PHONY: test/container
 test/container:
 	./scripts/check_container.sh
+
+# No publication or credentials required; verifies every platform archive.
+.PHONY: test/release
+test/release: check-release-tools
+	RELEASE_VERSION=$(RELEASE_VERSION) goreleaser release --clean --snapshot
+	python3 scripts/check_release.py dist --version "$$(python3 -c 'import json; print(json.load(open("dist/metadata.json"))["version"])')" --commit "$$(git rev-parse HEAD)"

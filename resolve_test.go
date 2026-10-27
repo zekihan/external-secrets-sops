@@ -186,3 +186,30 @@ func TestMemoryResolveCommand(t *testing.T) {
 		}
 	}
 }
+
+func TestMemoryResolveLimits(t *testing.T) {
+	input := `{"apps/app/production/values.yaml":"KEY: synthetic\n"}`
+	base := []string{
+		"--input",
+		"memory",
+		"--projects",
+		"apps",
+		"--environments",
+		"production",
+		"--bundle",
+		"apps/app/production",
+	}
+	for _, extra := range [][]string{{"--document-bytes", "8"}, {"--root", "unavailable"}, {"--repo", "unavailable"}, {"--revision", strings.Repeat("a", 40)}, {"--document-bytes", "8", "--snapshot-bytes", "8"}} {
+		var out, stderr bytes.Buffer
+		args := append(append([]string{}, base...), extra...)
+		if code := runResolveInput(
+			args,
+			strings.NewReader(input),
+			&out,
+			&stderr,
+		); code == 0 || out.Len() != 0 ||
+			stderr.Len() == 0 {
+			t.Fatal("memory input limits ignored")
+		}
+	}
+}

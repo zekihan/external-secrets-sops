@@ -36,6 +36,17 @@ for arch in amd64 arm64; do
     test "$(docker image inspect --format '{{.Os}}/{{.Architecture}} {{.Config.User}}' "$prefix:$arch")" = "linux/$arch 25000:25000"
     # Exercise the real entrypoint with its configured user and no network access.
     docker run --rm --platform "linux/$arch" --network none --read-only "$prefix:$arch" version
+    # Exercise the packaged resolver with stdin only and no identities or network.
+    docker run --rm -i --platform "linux/$arch" --network none --read-only \
+        "$prefix:$arch" resolve --input memory --projects apps --environments dev \
+        --bundle apps/app/dev <<'JSON' > "$scratch/resolved.json"
+{"apps/app/dev/values.yaml":"INPUT: synthetic\nDIGEST: {$template: '${INPUT | sha256}'}\n"}
+JSON
+    python3 - "$scratch/resolved.json" <<'PYCODE'
+import hashlib, json, sys
+with open(sys.argv[1]) as stream:
+    assert json.load(stream) == {"INPUT": "synthetic", "DIGEST": hashlib.sha256(b"synthetic").hexdigest()}
+PYCODE
     # Check effective IDs inside the same image, without assuming a shell exists.
     mkdir -p "$scratch/$arch"
     CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build -trimpath -o "$scratch/$arch/ids" ./scripts/container_ids/main.go

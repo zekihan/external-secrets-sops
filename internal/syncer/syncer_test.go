@@ -187,3 +187,59 @@ func TestRetry(t *testing.T) {
 	cancel()
 	<-done
 }
+
+func TestCompositionRollbackAndRestart(t *testing.T) {
+	cfg := testutil.Config(t)
+	store := new(snapshot.Store)
+	src := &fakeSource{}
+	worker := New(
+		cfg.Refresh,
+		src,
+		snapshot.NewBuilder(cfg, testutil.Plain{}),
+		store,
+		testutil.Logger(),
+	)
+	old := []byte("PASSWORD: old-synthetic\nACL: {$template: '${PASSWORD | sha256}'}\n")
+	newer := []byte("PASSWORD: new-synthetic\nACL: {$template: '${PASSWORD | sha256}'}\n")
+	for _, revision := range []string{"legacy", "candidate", "invalid", "legacy"} {
+		src.revision = revision
+		body := old
+		if revision == "candidate" {
+			body = newer
+		}
+		if revision == "invalid" {
+			body = []byte("ACL: {$ref: missing}\n")
+		}
+		src.docs = []source.Document{
+			{Project: "project", Config: "app", Environment: "dev", Encrypted: body},
+		}
+		previous := store.Load()
+		err := worker.refresh(t.Context())
+		if revision == "invalid" {
+			if err == nil || store.Load() != previous || src.marker.Revision != "candidate" {
+				t.Fatal("rejected candidate changed recovery state")
+			}
+			// A replacement process restores the last accepted encrypted revision.
+			src.docs[0].Encrypted = newer
+		} else if err != nil {
+			t.Fatal(err)
+		}
+		restored := new(snapshot.Store)
+		New(
+			cfg.Refresh,
+			src,
+			snapshot.NewBuilder(cfg, testutil.Plain{}),
+			restored,
+			testutil.Logger(),
+		).restore(t.Context())
+		if restored.Load() == nil || restored.Load().Revision() != src.marker.Revision {
+			t.Fatal("replacement did not restore accepted revision")
+		}
+		key := snapshot.Key{Project: "project", Config: "app", Environment: "dev"}
+		want, _ := store.Load().Values(key)
+		got, _ := restored.Load().Values(key)
+		if got["ACL"] != want["ACL"] || len(got["ACL"]) != 64 {
+			t.Fatal("replacement changed sha256 output")
+		}
+	}
+}
