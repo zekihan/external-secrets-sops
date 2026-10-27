@@ -1,5 +1,7 @@
 # external-secrets-sops
 
+Workflow security policy and local validation: [docs/workflow-security.md](docs/workflow-security.md).
+
 A Go HTTP provider for SOPS-encrypted secrets in Git. Each response comes from one validated, immutable Git revision. Designed for the External Secrets Operator webhook provider and standalone HTTP clients.
 
 > **BREAKING CHANGE: networked API listeners now require native TLS.** Wildcard, hostname and other non-loopback HTTP listeners fail startup until `server.tlsCertFile` and `server.tlsKeyFile` point to mounted certificate/key files. Ingress TLS termination alone is insufficient. Before deployment, migrate ESO webhook consumers and probes to HTTPS, validate Traefik's HTTPS upstream certificate chain and server name, arrange a restart after certificate renewal, and bootstrap certificates, trust and credentials independently of this provider. Source merge does not perform or authorize that migration. See the [required transport rollout steps](docs/operations.md#api-transport).
@@ -154,3 +156,26 @@ remove those legacy files separately after confirming recovery from a new slot.
 No automatic deletion of legacy diagnostic data occurs. Rollout sizing, legacy
 cleanup, and live repository authentication/availability acceptance require
 operator review; no trust, credential, or network policy changes are needed.
+
+### Final container validation
+
+Run `make build/release/docker` followed by `make test/container` with a local
+Unix-socket Docker engine supporting Linux amd64 and arm64 execution (Docker
+Desktop, or an engine with QEMU/binfmt configured). The PR workflow runs the same
+container check after building binaries. It enforces digest pins, pulls the bases
+with an empty Docker credential configuration, builds and loads each architecture,
+runs the real `version` entrypoint offline with a read-only filesystem, and checks
+both the image's configured user and effective UID/GID 25000 using a static probe.
+Temporary image tags and probe files are removed afterward; nothing is pushed.
+The probe is mounted only for the check and is not included in release images.
+
+The runtime mirror is `ghcr.io/zekihan/distroless:v1.0.0`, pinned to the OCI index
+`sha256:f2ec17ff44138983a5e892ab05a4eb91ea58e33d3bb263830713823ef13531c6`.
+Its Linux child manifests are amd64
+`sha256:a0df44f8431b78ceabafb9dbe8cda36895be93e99ec579ca36aa9435aadadc61`
+and arm64
+`sha256:4d3cc2e945625d61ae3180cc290a81d76e2183532923637c98dcae89385b0178`.
+On 2026-10-27 the prior Docker Hub digest
+`sha256:c5df9133291ff067b2a0a9ce2624fbf54aa4e6d72d0fb1a3a9ada39754a83a98`
+returned `not found`; this establishes failure to resolve that reference, not
+proof that it was deleted. Registry publication destinations are unchanged.
