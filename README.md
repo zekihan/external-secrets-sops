@@ -232,3 +232,31 @@ environment. Runtime coordinates include `apps/<app>/<environment>`,
 broader source environments required by their descriptors. Bootstrap and private
 records stay outside the runtime root. Existing serving defaults and the checked-in
 service config retain `generated` until the operator performs that migration.
+
+### In-memory candidate verification
+
+`resolve --input memory --projects apps,shared --environments cluster-1 --bundle apps/example/cluster-1`
+reads one JSON object from stdin. Keys are relative
+`project/config/environment/values.yaml` paths and values are YAML document strings.
+It accepts no root, repository, or revision flags, consults no identities, and
+writes no input files. Supply empty environment documents (`"{}\n"`) where a
+bundle inherits its base without overrides. All supplied documents must be inside
+the declared project/environment scope (bases are included); duplicates, invalid
+paths, malformed JSON, oversized inputs and invalid candidates fail before output.
+Only the selected bundle is emitted. Keep stdin/stdout in protected pipes and
+memory when verifying real operator candidates; never save resolver output as CI
+artifacts. The normal template, depth, byte and evaluation limits still apply.
+
+### Release readiness
+
+`make test/release` creates unpublished snapshot archives and checks all seven
+platform archives, SHA-256 checksums and embedded source/version metadata. It runs
+the native archived binary against synthetic `resolve`, memory-input, and `sha256`
+contracts, including candidate rejection and recovery. PR CI runs this gate.
+`make release` requires a tag matching `VERSION`, verifies an unpublished release
+build first, then publishes from that same checkout. Allocate a new version/tag
+before publication; the existing v3.0.1 release lacks these capabilities.
+Container version aliases are emitted only for version tags; main builds retain
+latest and commit tags. The image workflow records the source commit and published
+digest for the operator's release manifest. Published artifact downloads, registry
+digest/source verification and live refresh/restart checks remain operator gates.
