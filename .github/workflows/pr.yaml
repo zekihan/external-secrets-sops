@@ -67,3 +67,12 @@ jobs:
       - name: Build
         run: |
           make build/release/all
+
+      - name: Set up QEMU for container smoke tests
+        uses: docker/setup-qemu-action@v4.4.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4.4.1
+
+      - name: Build and smoke-test final containers anonymously
+        run: make test/container

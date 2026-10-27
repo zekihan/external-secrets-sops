@@ -50,3 +50,8 @@ build/release/docker: check-release-tools
 
 release: check-release-tools
 	goreleaser release --clean
+
+# Requires Linux binaries from build/all or build/release/docker and a local Docker engine.
+.PHONY: test/container
+test/container:
+	./scripts/check_container.sh
