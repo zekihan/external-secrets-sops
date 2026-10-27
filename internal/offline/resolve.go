@@ -5,6 +5,7 @@ package offline
 import (
 	"context"
 	"errors"
+	"io"
 	"slices"
 	"strings"
 	"time"
@@ -19,6 +20,7 @@ type Options struct {
 	Input, Root, Repo, Revision, Bundle string
 	Projects, Environments              []string
 	Limits                              config.Limits
+	Documents                           io.Reader
 }
 
 type synthetic struct{}
@@ -33,7 +35,7 @@ func Resolve(ctx context.Context, opts Options) (map[string]string, error) {
 	cfg.Git.Root = "."
 	cfg.Scope = config.Scope{Projects: opts.Projects, Environments: opts.Environments}
 	cfg.Limits = opts.Limits
-	if opts.Root == "" {
+	if opts.Root == "" && opts.Input != "memory" {
 		return nil, errors.New("root is required")
 	}
 	switch opts.Input {
@@ -41,13 +43,17 @@ func Resolve(ctx context.Context, opts Options) (map[string]string, error) {
 		if opts.Repo != "" || opts.Revision != "" {
 			return nil, errors.New("dummy input does not accept repo or revision")
 		}
+	case "memory":
+		if opts.Root != "" || opts.Repo != "" || opts.Revision != "" || opts.Documents == nil {
+			return nil, errors.New("memory input requires stdin only")
+		}
 	case "sops":
 		if opts.Repo == "" || opts.Revision == "" {
 			return nil, errors.New("sops input requires repo and revision")
 		}
 		cfg.Git.Root = opts.Root
 	default:
-		return nil, errors.New("input must be dummy or sops")
+		return nil, errors.New("input must be dummy, sops or memory")
 	}
 	if err := cfg.Validate(); err != nil {
 		return nil, err
@@ -67,10 +73,14 @@ func Resolve(ctx context.Context, opts Options) (map[string]string, error) {
 	var docs []source.Document
 	var d snapshot.Decrypter
 	var err error
-	if opts.Input == "dummy" {
+	switch opts.Input {
+	case "memory":
+		docs, err = memoryDocuments(ctx, cfg, opts.Documents)
+		d = synthetic{}
+	case "dummy":
 		docs, err = source.DummyDocuments(ctx, cfg, opts.Root)
 		d = synthetic{}
-	} else {
+	default:
 		docs, err = source.LocalDocuments(ctx, cfg, opts.Repo, opts.Revision)
 		d = decrypt.SOPS{}
 	}
@@ -79,6 +89,9 @@ func Resolve(ctx context.Context, opts Options) (map[string]string, error) {
 	}
 	candidate, err := snapshot.NewBuilder(cfg, d).Build(ctx, opts.Revision, time.Now(), docs)
 	if err != nil {
+		if opts.Input == "memory" {
+			return nil, errors.New("invalid memory candidate")
+		}
 		return nil, err
 	}
 	values, ok := candidate.Values(
