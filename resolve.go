@@ -17,10 +17,14 @@ import (
 )
 
 func runResolve(args []string, stdout, stderr io.Writer) int {
+	return runResolveInput(args, os.Stdin, stdout, stderr)
+}
+
+func runResolveInput(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	flags := flag.NewFlagSet("resolve", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	opts := offline.Options{Limits: config.Defaults().Limits}
-	flags.StringVar(&opts.Input, "input", "", "dummy or sops")
+	flags.StringVar(&opts.Input, "input", "", "dummy, sops or memory (stdin JSON documents)")
 	flags.StringVar(
 		&opts.Root,
 		"root",
@@ -81,6 +85,9 @@ func runResolve(args []string, stdout, stderr io.Writer) int {
 	if flags.NArg() != 0 || *timeout <= 0 {
 		_, _ = fmt.Fprintln(stderr, "invalid resolve arguments; use resolve --help")
 		return 2
+	}
+	if opts.Input == "memory" {
+		opts.Documents = stdin
 	}
 	opts.Projects = strings.Split(*projects, ",")
 	opts.Environments = strings.Split(*environments, ",")

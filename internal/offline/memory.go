@@ -1,0 +1,88 @@
+package offline
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"io"
+	"math"
+	"slices"
+	"strings"
+
+	"github.com/zekihan/external-secrets-sops/internal/config"
+	"github.com/zekihan/external-secrets-sops/internal/source"
+)
+
+// memoryDocuments accepts an operator's candidate without persisting plaintext.
+func memoryDocuments(
+	ctx context.Context,
+	cfg config.Config,
+	input io.Reader,
+) ([]source.Document, error) {
+	invalid := errors.New("invalid memory documents")
+	// JSON escaping can multiply document bytes by six. Bound path overhead too.
+	if cfg.Limits.SnapshotBytes > (math.MaxInt64-(4<<20))/6 {
+		return nil, errors.New("memory input limit too large")
+	}
+	limited := &io.LimitedReader{R: input, N: cfg.Limits.SnapshotBytes*6 + (4 << 20)}
+	decoder := json.NewDecoder(limited)
+	token, err := decoder.Token()
+	if err != nil || token != json.Delim('{') {
+		return nil, invalid
+	}
+	seen := make(map[string]bool)
+	var docs []source.Document
+	var total int64
+	for decoder.More() {
+		if err = ctx.Err(); err != nil {
+			return nil, errors.New("memory input canceled")
+		}
+		if len(docs) >= 4096 {
+			return nil, errors.New("memory document count exceeds limit")
+		}
+		token, err = decoder.Token()
+		name, ok := token.(string)
+		if err != nil || !ok || seen[name] {
+			return nil, invalid
+		}
+		seen[name] = true
+		parts := strings.Split(name, "/")
+		if len(parts) != 4 || parts[3] != "values.yaml" {
+			return nil, invalid
+		}
+		for _, part := range parts[:3] {
+			if !config.Component(part) {
+				return nil, invalid
+			}
+		}
+		if !slices.Contains(cfg.Scope.Projects, parts[0]) ||
+			(parts[2] != "base" && !slices.Contains(cfg.Scope.Environments, parts[2])) {
+			return nil, errors.New("memory document outside selected scope")
+		}
+		var value *string
+		if err = decoder.Decode(&value); err != nil || value == nil {
+			return nil, invalid
+		}
+		document := *value
+		total += int64(len(document))
+		if int64(len(document)) > cfg.Limits.DocumentBytes || total > cfg.Limits.SnapshotBytes {
+			return nil, errors.New("memory document bytes exceed limit")
+		}
+		docs = append(
+			docs,
+			source.Document{
+				Project:     parts[0],
+				Config:      parts[1],
+				Environment: parts[2],
+				Encrypted:   []byte(document),
+			},
+		)
+	}
+	if token, err = decoder.Token(); err != nil || token != json.Delim('}') {
+		return nil, invalid
+	}
+	if _, err = decoder.Token(); !errors.Is(err, io.EOF) || limited.N == 0 {
+		return nil, invalid
+	}
+	return docs, nil
+}

@@ -152,3 +152,37 @@ func TestResolveCommandOutputFailure(t *testing.T) {
 		t.Fatal("output error unsanitized")
 	}
 }
+
+func TestMemoryResolveCommand(t *testing.T) {
+	args := []string{
+		"--input",
+		"memory",
+		"--projects",
+		"apps,shared",
+		"--environments",
+		"production",
+		"--bundle",
+		"apps/app/production",
+	}
+	valid := `{"apps/app/production/values.yaml":"OUTPUT: {$template: '${shared/source/KEY | sha256}'}\n","shared/source/base/values.yaml":"KEY: synthetic\n","shared/source/production/values.yaml":"{}\n"}`
+	for _, input := range []string{valid, `{"apps/app/production/values.yaml":"SECRET_CANARY: {$ref: missing}"}`, `{"../SECRET_CANARY/production/values.yaml":"x"}`, `{"records/private/production/values.yaml":"x"}`, `{"apps/app/production/values.yaml":"x","apps/app/production/values.yaml":"y"}`, valid + `{}`, `null`, `{"apps/app/production/values.yaml":null}`} {
+		var out, stderr bytes.Buffer
+		code := runResolveInput(args, strings.NewReader(input), &out, &stderr)
+		if input == valid {
+			if code != 0 || stderr.Len() != 0 ||
+				!strings.Contains(
+					out.String(),
+					"b3cc0475bb78a5026098858e9889acf666d31062d513d303314eca31d36e72f2",
+				) {
+				t.Fatalf("memory contract failed: %d %s %s", code, out.String(), stderr.String())
+			}
+		} else if code == 0 || out.Len() != 0 || strings.Contains(stderr.String(), "SECRET_CANARY") {
+			t.Fatalf(
+				"invalid memory input accepted or leaked: %d %s %s",
+				code,
+				out.String(),
+				stderr.String(),
+			)
+		}
+	}
+}
