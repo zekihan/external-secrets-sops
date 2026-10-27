@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"math"
+	"os"
 	"slices"
 	"strings"
 
@@ -19,6 +20,26 @@ func memoryDocuments(
 	cfg config.Config,
 	input io.Reader,
 ) ([]source.Document, error) {
+	if file, ok := input.(*os.File); ok {
+		stream, err := cancellableFile(file)
+		if err != nil {
+			return nil, errors.New("cannot prepare memory input")
+		}
+		defer func() { _ = stream.Close() }()
+		input = stream
+	}
+	if closer, ok := input.(io.ReadCloser); ok {
+		closed := make(chan struct{})
+		stop := context.AfterFunc(ctx, func() {
+			_ = closer.Close()
+			close(closed)
+		})
+		defer func() {
+			if !stop() {
+				<-closed
+			}
+		}()
+	}
 	invalid := errors.New("invalid memory documents")
 	// JSON escaping can multiply document bytes by six. Bound path overhead too.
 	if cfg.Limits.SnapshotBytes > (math.MaxInt64-(4<<20))/6 {

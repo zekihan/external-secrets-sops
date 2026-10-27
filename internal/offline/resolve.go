@@ -20,7 +20,8 @@ type Options struct {
 	Input, Root, Repo, Revision, Bundle string
 	Projects, Environments              []string
 	Limits                              config.Limits
-	Documents                           io.Reader
+	// Blocking document streams must implement io.ReadCloser with Close interrupting Read.
+	Documents io.Reader
 }
 
 type synthetic struct{}

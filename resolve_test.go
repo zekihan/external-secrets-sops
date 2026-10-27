@@ -2,12 +2,15 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestResolveCommandOutput(t *testing.T) {
@@ -211,5 +214,59 @@ func TestMemoryResolveLimits(t *testing.T) {
 			stderr.Len() == 0 {
 			t.Fatal("memory input limits ignored")
 		}
+	}
+}
+
+func TestMemoryResolveStdinDeadline(t *testing.T) {
+	if os.Getenv("ESS_TEST_MEMORY_STDIN") == "1" {
+		os.Args = []string{
+			os.Args[0], "resolve", "--input", "memory", "--projects", "apps",
+			"--environments", "dev", "--bundle", "apps/app/dev", "--timeout", "50ms",
+		}
+		main()
+	}
+	for name, input := range map[string]string{
+		"empty":                "",
+		"partial":              `{"apps/app/dev/values.yaml":"SECRET_CANARY`,
+		"complete without EOF": `{"apps/app/dev/values.yaml":"KEY: synthetic\n"}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(
+				ctx,
+				os.Args[0],
+				"-test.run=^TestMemoryResolveStdinDeadline$",
+			)
+			cmd.Env = append(os.Environ(), "ESS_TEST_MEMORY_STDIN=1")
+			var stdout, stderr bytes.Buffer
+			cmd.Stdout, cmd.Stderr = &stdout, &stderr
+			stdin, err := cmd.StdinPipe()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer stdin.Close()
+			if err = cmd.Start(); err != nil {
+				t.Fatal(err)
+			}
+			if _, err = stdin.Write([]byte(input)); err != nil {
+				t.Fatal(err)
+			}
+			err = cmd.Wait()
+			if ctx.Err() != nil {
+				t.Fatal("stdin read ignored resolution deadline")
+			}
+			var failure *exec.ExitError
+			if !errors.As(err, &failure) || failure.ExitCode() != 1 || stdout.Len() != 0 ||
+				stderr.Len() == 0 ||
+				strings.Contains(stderr.String(), "SECRET_CANARY") {
+				t.Fatalf(
+					"cancellation contract failed: %v stdout=%q stderr=%q",
+					err,
+					stdout.String(),
+					stderr.String(),
+				)
+			}
+		})
 	}
 }
