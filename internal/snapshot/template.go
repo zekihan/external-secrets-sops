@@ -2,7 +2,9 @@ package snapshot
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -273,6 +275,9 @@ func encode(value, encoder string, appendText func(string) error) error {
 	switch encoder {
 	case "":
 		return appendText(value)
+	case "sha256":
+		sum := sha256.Sum256([]byte(value))
+		return appendText(hex.EncodeToString(sum[:]))
 	case "base64":
 		// Encode bounded chunks, without allocating an expanded copy of the input.
 		for len(value) > 0 {
