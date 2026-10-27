@@ -42,7 +42,8 @@ class CredentialScopeTests(unittest.TestCase):
                         self.assertNotIn('secrets.', step)
         description = (ROOT / '.github/workflows/docker_hub_readme.yaml').read_text()
         self.assertNotIn('login-action@', description)
-        self.assertIn('secrets.DOCKERHUB_PASSWORD', description)
+        self.assertIn('secrets.DOCKER_PASSWORD', description)
+        self.assertNotIn('secrets.DOCKERHUB_', description)
 
     def test_write_permissions_are_job_scoped(self):
         for path in (ROOT / '.github/workflows').glob('*.yaml'):
