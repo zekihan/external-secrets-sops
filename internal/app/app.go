@@ -56,6 +56,7 @@ func Run(
 	api := httpapi.New(store, worker, broadcaster, creds, cfg.Refresh.MaxStaleness, logger)
 	server := &http.Server{
 		Handler:           api.Handler(),
+		ErrorLog:          serverErrorLog(),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      10 * time.Second,
