@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -124,7 +125,12 @@ func TestEncoders(t *testing.T) {
 	sum := sha256.Sum256([]byte(value))
 	for encoder, want := range map[string]string{"sha256": hex.EncodeToString(sum[:]), "urlquery": url.QueryEscape(value), "urlpath": url.PathEscape(value), "urluserinfo": url.User(value).String(), "json": string(jsonValue), "base64": base64.StdEncoding.EncodeToString([]byte(value))} {
 		var got strings.Builder
-		err := encode(value, encoder, func(s string) error { got.WriteString(s); return nil })
+		err := encode(
+			t.Context(),
+			value,
+			encoder,
+			func(s string) error { got.WriteString(s); return nil },
+		)
 		if err != nil || got.String() != want {
 			t.Fatalf("%s = %q, want %q (%v)", encoder, got.String(), want, err)
 		}
@@ -132,6 +138,7 @@ func TestEncoders(t *testing.T) {
 	large := strings.Repeat("abcde", 2000)
 	var got strings.Builder
 	if err := encode(
+		t.Context(),
 		large,
 		"base64",
 		func(s string) error { got.WriteString(s); return nil },
@@ -337,7 +344,7 @@ func TestEncodersStopAtOutputLimit(t *testing.T) {
 			sentinel := errors.New("output limit")
 			size := 0
 			failed := false
-			err := encode(value, encoder, func(part string) error {
+			err := encode(t.Context(), value, encoder, func(part string) error {
 				if failed {
 					t.Fatal("encoder continued after output limit")
 				}
@@ -376,6 +383,7 @@ ACL:
 	}
 	sentinel := errors.New("output limit")
 	if err := encode(
+		t.Context(),
 		"abc",
 		"sha256",
 		func(string) error { return sentinel },
@@ -384,5 +392,148 @@ ACL:
 		sentinel,
 	) {
 		t.Fatal("hash output limit not propagated")
+	}
+}
+
+// checkBudgetContext makes excessive hash work fail deterministically, without a
+// wall-clock assertion that varies across machines and race-test runs.
+type checkBudgetContext struct {
+	context.Context
+	cancel context.CancelFunc
+	checks atomic.Int64
+	budget int64
+}
+
+func (c *checkBudgetContext) Err() error {
+	if c.checks.Add(1) > c.budget {
+		c.cancel()
+	}
+	return c.Context.Err()
+}
+
+func boundedContext(t *testing.T, budget int64) *checkBudgetContext {
+	t.Helper()
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+	return &checkBudgetContext{Context: ctx, cancel: cancel, budget: budget}
+}
+
+func TestRepeatedLargeSHA256Target(t *testing.T) {
+	const repetitions = 4096
+	value := strings.Repeat("x", 1<<20)
+	key := Key{"apps", "app", "cluster-1"}
+	raw := map[Key]map[string]scalar{key: {
+		"INPUT":  {value: value},
+		"OUTPUT": {kind: "$template", value: strings.Repeat("${INPUT | sha256}", repetitions)},
+	}}
+	// Each output still pays reference and output checks. Rehashing the input for
+	// every reference would exhaust this budget of context checks between chunks.
+	ctx := boundedContext(t, repetitions*6+64)
+	data, size, err := resolve(ctx, raw, config.Defaults().Limits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256([]byte(value))
+	want := strings.Repeat(hex.EncodeToString(sum[:]), repetitions)
+	if data[key]["OUTPUT"] != want {
+		t.Fatal("repeated digest mismatch")
+	}
+	wantSize := int64(len("INPUT") + len(value) + len("OUTPUT") + len(want))
+	if size != wantSize {
+		t.Fatalf("resolved size = %d, want %d", size, wantSize)
+	}
+}
+
+func TestSHA256CancellationBetweenChunks(t *testing.T) {
+	ctx := boundedContext(t, 2)
+	emitted := false
+	err := encode(ctx, strings.Repeat("x", 128<<10), "sha256", func(string) error {
+		emitted = true
+		return nil
+	})
+	if !errors.Is(err, context.Canceled) || emitted {
+		t.Fatalf("cancellation = %v, emitted = %t", err, emitted)
+	}
+}
+
+func TestSHA256MemoizationPreservesLimits(t *testing.T) {
+	key := Key{"apps", "app", "cluster-1"}
+	raw := map[Key]map[string]scalar{key: {
+		"a": {value: "x"},
+		"b": {kind: "$template", value: "${a | sha256}${a | sha256}"},
+	}}
+	for _, tc := range []struct {
+		name   string
+		change func(*config.Limits)
+		fail   bool
+	}{
+		{"value boundary", func(l *config.Limits) { l.TemplateValueBytes = 128 }, false},
+		{"value overflow", func(l *config.Limits) { l.TemplateValueBytes = 127 }, true},
+		{"aggregate boundary", func(l *config.Limits) { l.SnapshotBytes = 131 }, false},
+		{"aggregate overflow", func(l *config.Limits) { l.SnapshotBytes = 130 }, true},
+		{"evaluation boundary", func(l *config.Limits) { l.TemplateEvaluations = 2 }, false},
+		{"evaluation overflow", func(l *config.Limits) { l.TemplateEvaluations = 1 }, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			limits := config.Defaults().Limits
+			tc.change(&limits)
+			_, _, err := resolve(t.Context(), raw, limits)
+			if (err != nil) != tc.fail {
+				t.Fatalf("resolution error = %v", err)
+			}
+		})
+	}
+	raw[key] = map[string]scalar{
+		"a": {value: "x"},
+		"b": {kind: "$ref", value: "a"},
+		"c": {kind: "$template", value: "${b | sha256}"},
+		"d": {kind: "$ref", value: "e"},
+		"e": {kind: "$template", value: "${b | sha256}"},
+	}
+	limits := config.Defaults().Limits
+	limits.TemplateDepth = 2
+	if _, _, err := resolve(t.Context(), raw, limits); err == nil {
+		t.Fatal("cached hash bypassed depth limit")
+	}
+	limits.TemplateDepth = 3
+	if _, _, err := resolve(t.Context(), raw, limits); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSHA256CacheUsesFullResolvedAddress(t *testing.T) {
+	key := Key{"apps", "app", "cluster-1"}
+	sourceKey := Key{"shared", "source", "production"}
+	r := resolver{
+		ctx:    t.Context(),
+		limits: config.Defaults().Limits,
+		raw: map[Key]map[string]scalar{
+			key: {
+				"INPUT": {value: "first"},
+				"OUTPUT": {
+					kind:  "$template",
+					value: "${INPUT | sha256}${shared/source/production/INPUT | sha256}${INPUT | sha256}",
+				},
+			},
+			sourceKey: {"INPUT": {value: "second"}},
+		},
+		memo:     make(map[address]resolved),
+		digests:  make(map[address]string),
+		visiting: make(map[address]bool),
+	}
+	result, err := r.value(address{key, "OUTPUT"}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, second := sha256.Sum256([]byte("first")), sha256.Sum256([]byte("second"))
+	want := hex.EncodeToString(
+		first[:],
+	) + hex.EncodeToString(
+		second[:],
+	) + hex.EncodeToString(
+		first[:],
+	)
+	if result.value != want || len(r.digests) != 2 || r.evaluations != 3 {
+		t.Fatal("hash cache crossed addresses or skipped accounting")
 	}
 }

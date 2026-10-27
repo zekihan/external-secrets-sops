@@ -53,6 +53,7 @@ type resolver struct {
 	raw         map[Key]map[string]scalar
 	limits      config.Limits
 	memo        map[address]resolved
+	digests     map[address]string
 	visiting    map[address]bool
 	evaluations int
 	size        int64
@@ -71,6 +72,7 @@ func resolve(
 		raw:      raw,
 		limits:   limits,
 		memo:     make(map[address]resolved),
+		digests:  make(map[address]string),
 		visiting: make(map[address]bool),
 	}
 	var addresses []address
@@ -174,7 +176,20 @@ func (r *resolver) value(a address, depth int) (result resolved, err error) {
 			return e
 		}
 		result.height = max(result.height, v.height+1)
-		return encode(v.value, encoder, appendText)
+		if encoder == "sha256" {
+			// Key by address: a value-sized map key would itself rehash the
+			// entire source on every reference, allowing work amplification.
+			digest, ok := r.digests[target]
+			if !ok {
+				digest, e = sha256Digest(r.ctx, v.value)
+				if e != nil {
+					return e
+				}
+				r.digests[target] = digest
+			}
+			return appendText(digest)
+		}
+		return encode(r.ctx, v.value, encoder, appendText)
 	}
 	switch s.kind {
 	case "":
@@ -271,13 +286,32 @@ func parseReference(current Key, text string) (address, error) {
 	return a, nil
 }
 
-func encode(value, encoder string, appendText func(string) error) error {
+func sha256Digest(ctx context.Context, value string) (string, error) {
+	h := sha256.New()
+	for len(value) > 0 {
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
+		n := min(len(value), 32<<10)
+		_, _ = h.Write([]byte(value[:n]))
+		value = value[n:]
+	}
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+func encode(ctx context.Context, value, encoder string, appendText func(string) error) error {
 	switch encoder {
 	case "":
 		return appendText(value)
 	case "sha256":
-		sum := sha256.Sum256([]byte(value))
-		return appendText(hex.EncodeToString(sum[:]))
+		digest, err := sha256Digest(ctx, value)
+		if err != nil {
+			return err
+		}
+		return appendText(digest)
 	case "base64":
 		// Encode bounded chunks, without allocating an expanded copy of the input.
 		for len(value) > 0 {
