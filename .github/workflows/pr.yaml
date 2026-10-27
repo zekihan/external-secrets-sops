@@ -1,41 +1,35 @@
 name: PR Workflow
-
-on:
-  workflow_dispatch:
+"on":
+  workflow_dispatch: null
   pull_request:
     branches:
       - main
-
 concurrency:
   group: pr-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
-
 permissions:
   contents: read
-
 jobs:
   pr:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - name: Check Out The Repo
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-
+          persist-credentials: false
       - name: Set up Go
-        uses: actions/setup-go@v7.0.0
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache: true
           cache-dependency-path: go.sum
-
       - name: Set up GoReleaser
-        uses: goreleaser/goreleaser-action@v7.3.0
+        uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
         with:
           version: v2.19.0
           install-only: true
-
       - name: Install build dependencies
         run: |
           sudo apt-get update -qq
@@ -46,24 +40,21 @@ jobs:
           else
             echo "No build dependencies script found, skipping."
           fi
-
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v9.3.0
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: v2.15.0
-
       - name: Lint
         run: |
           make lint
-
       - name: Fail if there are any changes
         run: |
           git diff --exit-code
-
       - name: Test
         run: |
           make test
-
       - name: Build
         run: |
           make build/release/all
+    permissions:
+      contents: read

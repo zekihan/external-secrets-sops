@@ -154,3 +154,5 @@ remove those legacy files separately after confirming recovery from a new slot.
 No automatic deletion of legacy diagnostic data occurs. Rollout sizing, legacy
 cleanup, and live repository authentication/availability acceptance require
 operator review; no trust, credential, or network policy changes are needed.
+
+Workflow security policy and local validation: [docs/workflow-security.md](docs/workflow-security.md).
