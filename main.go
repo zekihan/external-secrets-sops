@@ -27,6 +27,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 		command = args[0]
 		args = args[1:]
 	}
+	if command == "resolve" {
+		return runResolve(args, stdout, stderr)
+	}
 	flags := flag.NewFlagSet(command, flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	filename := flags.String("config", "config.yaml", "configuration file")
@@ -50,7 +53,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	default:
 		_, _ = fmt.Fprintln(
 			stderr,
-			"usage: external-secrets-sops [serve|check-config|version] [--config path]",
+			"usage: external-secrets-sops [serve|check-config|resolve|version] [--config path]",
 		)
 		return 2
 	}
