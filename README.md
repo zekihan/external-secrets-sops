@@ -83,6 +83,7 @@ Each interpolation accepts at most one optional encoder:
 | `urluserinfo` | URL username/password component |
 | `json` | JSON string including surrounding quotes |
 | `base64` | Standard padded Base64 |
+| `sha256` | SHA-256 digest as 64 lowercase hexadecimal characters |
 
 No implicit encoding, loops, conditionals, encoder pipelines, external lookups, or fallbacks are supported.
 

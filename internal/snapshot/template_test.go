@@ -2,7 +2,9 @@ package snapshot
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -119,7 +121,8 @@ func TestReferenceEscaping(t *testing.T) {
 func TestEncoders(t *testing.T) {
 	value := "a:b@ /?&=+雪\n\"<>\u2028"
 	jsonValue, _ := json.Marshal(value)
-	for encoder, want := range map[string]string{"urlquery": url.QueryEscape(value), "urlpath": url.PathEscape(value), "urluserinfo": url.User(value).String(), "json": string(jsonValue), "base64": base64.StdEncoding.EncodeToString([]byte(value))} {
+	sum := sha256.Sum256([]byte(value))
+	for encoder, want := range map[string]string{"sha256": hex.EncodeToString(sum[:]), "urlquery": url.QueryEscape(value), "urlpath": url.PathEscape(value), "urluserinfo": url.User(value).String(), "json": string(jsonValue), "base64": base64.StdEncoding.EncodeToString([]byte(value))} {
 		var got strings.Builder
 		err := encode(value, encoder, func(s string) error { got.WriteString(s); return nil })
 		if err != nil || got.String() != want {
@@ -151,6 +154,8 @@ func TestTemplateLimits(t *testing.T) {
 		{"evaluation overflow", "a: x\nb: {$template: '${a}${a}'}", func(l *config.Limits) { l.TemplateEvaluations = 1 }, true},
 		{"value boundary", "a: xx\nb: {$template: '${a}${a}'}", func(l *config.Limits) { l.TemplateValueBytes = 4 }, false},
 		{"value overflow", "a: xx\nb: {$template: '${a}${a}'}", func(l *config.Limits) { l.TemplateValueBytes = 3 }, true},
+		{"sha256 boundary", "a: x\nb: {$template: '${a | sha256}'}", func(l *config.Limits) { l.TemplateValueBytes = 64 }, false},
+		{"sha256 overflow", "a: x\nb: {$template: '${a | sha256}'}", func(l *config.Limits) { l.TemplateValueBytes = 63 }, true},
 		{"encoder overflow", "a: '::'\nb: {$template: '${a | urluserinfo}'}", func(l *config.Limits) { l.TemplateValueBytes = 5 }, true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -347,5 +352,37 @@ func TestEncodersStopAtOutputLimit(t *testing.T) {
 				t.Fatalf("output limit not propagated: %v", err)
 			}
 		})
+	}
+}
+
+func TestSHA256ACL(t *testing.T) {
+	cfg := testutil.Config(t)
+	s, err := NewBuilder(
+		cfg,
+		testutil.Plain{},
+	).Build(t.Context(), "r", time.Now(), []source.Document{doc("dev", `PASSWORD: abc
+ACL:
+  $template: |
+    user default off
+    user app on #${PASSWORD | sha256} ~* +@all
+`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := s.Value(Key{"project", "app", "dev"}, "ACL")
+	want := "user default off\nuser app on #ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad ~* +@all\n"
+	if got != want {
+		t.Fatalf("ACL = %q, want %q", got, want)
+	}
+	sentinel := errors.New("output limit")
+	if err := encode(
+		"abc",
+		"sha256",
+		func(string) error { return sentinel },
+	); !errors.Is(
+		err,
+		sentinel,
+	) {
+		t.Fatal("hash output limit not propagated")
 	}
 }
