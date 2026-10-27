@@ -1,5 +1,7 @@
 # external-secrets-sops
 
+Workflow security policy and local validation: [docs/workflow-security.md](docs/workflow-security.md).
+
 A Go HTTP provider for SOPS-encrypted secrets in Git. Each response comes from one validated, immutable Git revision. Designed for the External Secrets Operator webhook provider and standalone HTTP clients.
 
 > **BREAKING CHANGE: networked API listeners now require native TLS.** Wildcard, hostname and other non-loopback HTTP listeners fail startup until `server.tlsCertFile` and `server.tlsKeyFile` point to mounted certificate/key files. Ingress TLS termination alone is insufficient. Before deployment, migrate ESO webhook consumers and probes to HTTPS, validate Traefik's HTTPS upstream certificate chain and server name, arrange a restart after certificate renewal, and bootstrap certificates, trust and credentials independently of this provider. Source merge does not perform or authorize that migration. See the [required transport rollout steps](docs/operations.md#api-transport).
