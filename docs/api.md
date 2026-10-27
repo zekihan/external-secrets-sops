@@ -23,3 +23,14 @@ Metrics: `ess_refresh_total{outcome}`, `ess_refresh_duration_seconds_sum`, `ess_
 Errors use `{"error":"code"}` with 400 invalid input, 401 missing/invalid credentials, 403 wrong role, 404 absent document/key, 405 unsupported method, 503 missing/expired snapshot, or 500 internal failure. Error bodies never contain underlying Git/SOPS errors, secret values, or credential material.
 
 External Secrets webhook configuration should use the all-secrets route, a reader Bearer token, and `result.jsonPath: $.data`.
+
+## Runtime-layout coordinates
+
+During the coordinated secrets-layout migration, configure the root as
+`encrypted/runtime`, projects as `[apps, shared]`, and environments as only the
+service's own cluster. App reads then use `/v1/secrets/apps/<app>/<cluster>`.
+Shared documents resolve through descriptors within that same configured scope.
+Do not widen online scope to production/local to satisfy offline consumer refs;
+use the offline `resolve` command with an explicit dependency scope instead.
+Bootstrap and private records remain outside the runtime root. Existing service
+defaults retain the `generated` layout pending that operator cutover.

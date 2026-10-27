@@ -58,3 +58,45 @@ Expect a temporary provider interruption while old pods drain and v2 snapshots b
 Rollback reverts the image and deployment/SecretStore contracts together. Keep the old credentials available through the rollback window; v1 uses different credential names and routes. Do not roll back only the image. Source secret document changes are a separate operation and are not part of this rewrite.
 
 Local build/test commands do not publish images, provision credentials, push Git changes, or modify deployments.
+
+## Coordinated runtime-layout migration
+
+The offline `resolve` command can validate synthetic fixtures before any secret
+migration. Mark only synthetic roots with `.dummy-secrets` containing exactly
+`synthetic-only\n`; do not mark a real plaintext tree. Dummy mode skips SOPS
+entirely. Run the command from the README against the full explicit dependency
+scope, select each intended consumer bundle, and validate each rendered consumer
+format. Resolution uses one candidate and emits no output on candidate failures.
+
+For encrypted operator input, pin `--revision` to a full local Git commit hash
+and `--root encrypted/runtime`. The command reads committed encrypted blobs,
+never the working tree; it performs no fetch or write. Its stdout contains only
+the selected bundle and must not be saved to logs. Terraform's external data
+source can consume this JSON string map directly and send an ignored `{}` query
+on stdin. No reader/admin/Git/Redis credentials are needed for local resolution;
+SOPS identities are needed only for `--input sops`.
+
+After the secrets repository and consumers are prepared, configure each cluster
+service with the following scope, substituting its own cluster environment:
+
+```yaml
+git:
+  root: encrypted/runtime
+scope:
+  projects: [apps, shared]
+  environments: [cluster-1]
+```
+
+Keep bootstrap credentials, TLS material and private records outside this runtime
+scope. Production/local dependencies needed by offline Terraform consumers do
+not widen the online cluster scope. Preserve bootstrap order and existing consumer
+Secret keys. The shipped defaults remain compatible with the current `generated`
+layout until the coordinated cutover.
+
+Deploy a provider version supporting the `sha256` encoder before introducing
+Redis/Sentinel ACL descriptors. It hashes the exact UTF-8 bytes of the source
+string to 64 lowercase hexadecimal characters. Preserve complete ACL content and
+newlines; compare full synthetic rendered ACL fixtures before rollout. Output is
+subject to the same resolved-value and aggregate bounds as every other encoder.
+Encoder pipelines are unsupported: derive an encoded intermediate key, reference
+that key, then apply another encoder in a separate descriptor if required.

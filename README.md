@@ -180,3 +180,55 @@ On 2026-10-27 the prior Docker Hub digest
 `sha256:c5df9133291ff067b2a0a9ce2624fbf54aa4e6d72d0fb1a3a9ada39754a83a98`
 returned `not found`; this establishes failure to resolve that reference, not
 proof that it was deleted. Registry publication destinations are unchanged.
+
+## Offline resolution
+
+`resolve` uses the same snapshot merge, descriptor validation, reference and
+encoder implementation as `serve`. It does not start HTTP/Redis, fetch Git, load
+server credentials, write a cache, or persist plaintext. It validates the whole
+explicit dependency scope before emitting only the requested bundle as a JSON
+object of strings. Failures leave stdout empty and use sanitized stderr errors.
+The process ignores stdin, including Terraform external data queries such as `{}`.
+Treat successful stdout as secret data.
+
+Synthetic fixtures require a regular `.dummy-secrets` file directly inside the
+root, containing exactly `synthetic-only` followed by a newline. Dummy mode never
+calls SOPS or consults identities:
+
+```sh
+external-secrets-sops resolve --input dummy \
+  --root ./dummy/runtime --projects apps,shared,terraform,automation \
+  --environments production,cluster-1,cluster-2 \
+  --bundle terraform/git/production
+```
+
+Encrypted input reads only committed blobs from a local repository at a full
+40-character commit hash. Branches, tags, abbreviated revisions, working tree
+changes, and remote fetches are excluded. Root is a clean repository-relative
+path; no decrypted files are written:
+
+```sh
+external-secrets-sops resolve --input sops --repo /path/to/secrets \
+  --revision FULL_COMMIT_HASH --root encrypted/runtime \
+  --projects apps,shared,terraform,automation \
+  --environments production,cluster-1,cluster-2 \
+  --bundle terraform/git/production
+```
+
+The SOPS command uses the operator's normal SOPS identity configuration. The
+bundle must belong to the supplied project/environment scope. Base documents
+are loaded for inheritance, and only an explicitly selected `base` environment
+can be referenced directly. Cross-environment references require every source
+environment explicitly in scope. Missing references, cycles, duplicate keys,
+invalid descriptors, selected symlinks and size/depth/evaluation limit violations
+fail the entire candidate. Use `resolve --help` for deadline and limit flags;
+default limits match the service.
+
+For the coordinated secrets-layout migration, use `git.root: encrypted/runtime`
+and online projects `[apps, shared]` with only the deployment's own cluster
+environment. Runtime coordinates include `apps/<app>/<environment>`,
+`shared/<owner>/<environment>`, `terraform/<stack>/production`, and
+`automation/ansible/production`. Offline consumers can explicitly select the
+broader source environments required by their descriptors. Bootstrap and private
+records stay outside the runtime root. Existing serving defaults and the checked-in
+service config retain `generated` until the operator performs that migration.
