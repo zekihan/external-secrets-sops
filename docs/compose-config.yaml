@@ -5,7 +5,7 @@ server:
 git:
   url: https://github.com/example/secrets.git
   branch: main
-  root: generated
+  root: encrypted/runtime
   cacheDir: /data/cache
 scope:
   projects: [example]

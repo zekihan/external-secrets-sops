@@ -7,7 +7,7 @@ services:
     environment:
       SOPS_AGE_KEY_FILE: /credentials/age.txt
     volumes:
-      - ./docs/compose-config.yaml:/config/config.yaml:ro
+      - ${ESS_CONFIG_FILE:-./docs/compose-config.yaml}:/config/config.yaml:ro
       - ${SOPS_AGE_KEY_FILE:?Set SOPS_AGE_KEY_FILE}:/credentials/age.txt:ro
       - ${ESS_TLS_CERT_FILE:?Set ESS_TLS_CERT_FILE}:/credentials/tls.crt:ro
       - ${ESS_TLS_KEY_FILE:?Set ESS_TLS_KEY_FILE}:/credentials/tls.key:ro

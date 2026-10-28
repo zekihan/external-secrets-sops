@@ -230,11 +230,10 @@ environment. Runtime coordinates include `apps/<app>/<environment>`,
 `shared/<owner>/<environment>`, `terraform/<stack>/production`, and
 `automation/ansible/production`. Offline consumers can explicitly select the
 broader source environments required by their descriptors. Bootstrap and private
-records stay outside the runtime root. Serving defaults and checked-in local/
-Compose examples retain `generated` for backward compatibility; select the root
-and scope explicitly for a new-layout deployment. The homelab cluster-1 cutover
+records stay outside the runtime root. Serving defaults and checked-in local/Compose examples use `encrypted/runtime`.
+Select the project and environment scope explicitly for each deployment. The homelab cluster-1 cutover
 is complete and uses the new layout, as recorded in the [execution record](https://github.com/zekihan/argocd/blob/main/docs/secrets-layout-execution-2026-10-27.md).
-Those legacy defaults do not describe its effective configuration. Retain legacy
+Explicit legacy configurations retain `generated` for rollback. Retain legacy
 sources and frozen compatibility fields through the separately approved
 retirement gate; layout changes do not authorize credential or CA rotation.
 

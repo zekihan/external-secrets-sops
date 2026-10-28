@@ -7,7 +7,7 @@ server:
 git:
   url: ./tmp/secrets.git
   branch: main
-  root: generated
+  root: encrypted/runtime
   cacheDir: ./tmp/cache
   tokenEnv: ESS_GIT_TOKEN
 scope:

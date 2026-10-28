@@ -122,3 +122,27 @@ func TestTemplateLimitConfiguration(t *testing.T) {
 		}
 	}
 }
+
+func TestActiveRootDefaultAndExplicitLegacyConfigs(t *testing.T) {
+	if got := Defaults().Git.Root; got != "encrypted/runtime" {
+		t.Fatalf("default root = %q", got)
+	}
+	for _, tt := range []struct{ file, root string }{
+		{"config.yaml", "encrypted/runtime"},
+		{"docs/compose-config.yaml", "encrypted/runtime"},
+		{"config.legacy.yaml", "generated"},
+		{"docs/compose-legacy-config.yaml", "generated"},
+	} {
+		t.Run(tt.file, func(t *testing.T) {
+			cfg, _, err := Load(filepath.Join("../..", tt.file), func(name string) string {
+				return "fixture-" + name
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.Git.Root != tt.root {
+				t.Fatalf("root = %q, want %q", cfg.Git.Root, tt.root)
+			}
+		})
+	}
+}
