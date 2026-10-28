@@ -76,8 +76,8 @@ source can consume this JSON string map directly and send an ignored `{}` query
 on stdin. No reader/admin/Git/Redis credentials are needed for local resolution;
 SOPS identities are needed only for `--input sops`.
 
-After the secrets repository and consumers are prepared, configure each cluster
-service with the following scope, substituting its own cluster environment:
+For a deployment using the new runtime layout, configure each cluster service
+with the following scope, substituting its own cluster environment:
 
 ```yaml
 git:
@@ -90,8 +90,12 @@ scope:
 Keep bootstrap credentials, TLS material and private records outside this runtime
 scope. Production/local dependencies needed by offline Terraform consumers do
 not widen the online cluster scope. Preserve bootstrap order and existing consumer
-Secret keys. The shipped defaults remain compatible with the current `generated`
-layout until the coordinated cutover.
+Secret keys. Shipped local/Compose defaults retain `generated` for backward
+compatibility. The homelab cluster-1 cutover has completed with the explicit scope
+above; see the [execution record](https://github.com/zekihan/argocd/blob/main/docs/secrets-layout-execution-2026-10-27.md).
+Existing installations using other roots need their own migration assessment.
+Keep legacy and recovery material until retention and explicit retirement gates
+are met; preserve frozen metadata and CA identity.
 
 Deploy a provider version supporting the `sha256` encoder before introducing
 Redis/Sentinel ACL descriptors. It hashes the exact UTF-8 bytes of the source
