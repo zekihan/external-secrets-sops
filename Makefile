@@ -3,7 +3,7 @@ GOLANGCI_LINT_VERSION := 2.15.0
 GORELEASER_VERSION := 2.19.0
 RELEASE_VERSION := $(shell cat VERSION)
 
-.PHONY: fmt tidy lint test test/cover build run run/legacy audit build/local build/all build/release/all build/release/docker release check-tools check-release-tools
+.PHONY: fmt tidy lint test test/cover build run audit build/local build/all build/release/all build/release/docker release check-tools check-release-tools
 fmt:
 	gofmt -w *.go internal
 	golangci-lint fmt
@@ -35,9 +35,6 @@ build/local:
 
 run: build
 	./dist/external-secrets-sops serve --config config.yaml
-
-run/legacy: build
-	./dist/external-secrets-sops serve --config config.legacy.yaml
 
 audit: lint test
 	$(GO) mod verify
