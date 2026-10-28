@@ -32,7 +32,6 @@ service's own cluster. App reads then use `/v1/secrets/apps/<app>/<cluster>`.
 Shared documents resolve through descriptors within that same configured scope.
 Do not widen online scope to production/local to satisfy offline consumer refs;
 use the offline `resolve` command with an explicit dependency scope instead.
-Bootstrap and private records remain outside the runtime root. Existing service
-defaults retain `generated` for backward compatibility. The completed homelab
-cluster-1 deployment explicitly selects the new layout; shipped examples are
-not evidence of its active root. See the [execution record](https://github.com/zekihan/argocd/blob/main/docs/secrets-layout-execution-2026-10-27.md).
+Bootstrap and private records remain outside the runtime root. Service defaults use
+`encrypted/runtime`. Explicit legacy configuration remains supported. The completed homelab
+cluster-1 deployment explicitly selects the new layout; legacy examples are rollback inputs only. See the [execution record](https://github.com/zekihan/argocd/blob/main/docs/secrets-layout-execution-2026-10-27.md).

@@ -92,7 +92,7 @@ func Defaults() Config {
 		},
 		Git: Git{
 			Branch:   "main",
-			Root:     "generated",
+			Root:     "encrypted/runtime",
 			CacheDir: "./tmp/cache",
 			TokenEnv: "ESS_GIT_TOKEN",
 		},
