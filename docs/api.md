@@ -1,4 +1,4 @@
-# HTTP API v2
+# HTTP API
 
 Send `Authorization: Bearer <token>` for authenticated routes. Reader and admin roles are disjoint; admin tokens cannot read secrets. All responses use `Cache-Control: no-store`. Secret success responses carry `X-Secret-Revision` with the Git commit hash.
 
@@ -26,11 +26,13 @@ External Secrets webhook configuration should use the all-secrets route, a reade
 
 ## Runtime-layout coordinates
 
-During the coordinated secrets-layout migration, configure the root as
+For the new runtime layout, configure the root as
 `encrypted/runtime`, projects as `[apps, shared]`, and environments as only the
 service's own cluster. App reads then use `/v1/secrets/apps/<app>/<cluster>`.
 Shared documents resolve through descriptors within that same configured scope.
 Do not widen online scope to production/local to satisfy offline consumer refs;
 use the offline `resolve` command with an explicit dependency scope instead.
 Bootstrap and private records remain outside the runtime root. Existing service
-defaults retain the `generated` layout pending that operator cutover.
+defaults retain `generated` for backward compatibility. The completed homelab
+cluster-1 deployment explicitly selects the new layout; shipped examples are
+not evidence of its active root. See the [execution record](https://github.com/zekihan/argocd/blob/main/docs/secrets-layout-execution-2026-10-27.md).

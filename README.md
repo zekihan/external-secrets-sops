@@ -224,14 +224,19 @@ invalid descriptors, selected symlinks and size/depth/evaluation limit violation
 fail the entire candidate. Use `resolve --help` for deadline and limit flags;
 default limits match the service.
 
-For the coordinated secrets-layout migration, use `git.root: encrypted/runtime`
+For the new runtime layout, use `git.root: encrypted/runtime`
 and online projects `[apps, shared]` with only the deployment's own cluster
 environment. Runtime coordinates include `apps/<app>/<environment>`,
 `shared/<owner>/<environment>`, `terraform/<stack>/production`, and
 `automation/ansible/production`. Offline consumers can explicitly select the
 broader source environments required by their descriptors. Bootstrap and private
-records stay outside the runtime root. Existing serving defaults and the checked-in
-service config retain `generated` until the operator performs that migration.
+records stay outside the runtime root. Serving defaults and checked-in local/
+Compose examples retain `generated` for backward compatibility; select the root
+and scope explicitly for a new-layout deployment. The homelab cluster-1 cutover
+is complete and uses the new layout, as recorded in the [execution record](https://github.com/zekihan/argocd/blob/main/docs/secrets-layout-execution-2026-10-27.md).
+Those legacy defaults do not describe its effective configuration. Retain legacy
+sources and frozen compatibility fields through the separately approved
+retirement gate; layout changes do not authorize credential or CA rotation.
 
 ### In-memory candidate verification
 
