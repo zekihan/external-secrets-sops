@@ -233,9 +233,11 @@ broader source environments required by their descriptors. Bootstrap and private
 records stay outside the runtime root. Serving defaults and checked-in local/Compose examples use `encrypted/runtime`.
 Select the project and environment scope explicitly for each deployment. The homelab cluster-1 cutover
 is complete and uses the new layout, as recorded in the [execution record](https://github.com/zekihan/argocd/blob/main/docs/secrets-layout-execution-2026-10-27.md).
-Explicit legacy configurations retain `generated` for rollback. Retain legacy
-sources and frozen compatibility fields through the separately approved
-retirement gate; layout changes do not authorize credential or CA rotation.
+The homelab's separately authorized local retirement removes legacy configuration
+examples and active compatibility metadata. Recovery uses matched Git revisions
+recorded in the secrets repository's retirement record, with retained age
+identities and untracked encrypted snapshots. Publishing and deployment remain
+separate from that local preparation.
 
 ### In-memory candidate verification
 
