@@ -93,8 +93,8 @@ not widen the online cluster scope. Preserve bootstrap order and existing consum
 Secret keys. Shipped local/Compose defaults use `encrypted/runtime`. The homelab
 cluster-1 cutover has completed with the explicit scope above; see the [execution record](https://github.com/zekihan/argocd/blob/main/docs/secrets-layout-execution-2026-10-27.md).
 Existing installations using other roots need their own migration assessment.
-Keep legacy and recovery material until retention and explicit retirement gates
-are met; preserve frozen metadata and CA identity.
+The user authorized early homelab legacy retirement on 2026-10-28, including
+compatibility metadata. Preserve CA identity and untracked encrypted recovery.
 
 Deploy a provider version supporting the `sha256` encoder before introducing
 Redis/Sentinel ACL descriptors. It hashes the exact UTF-8 bytes of the source
@@ -104,15 +104,13 @@ subject to the same resolved-value and aggregate bounds as every other encoder.
 Encoder pipelines are unsupported: derive an encoded intermediate key, reference
 that key, then apply another encoder in a separate descriptor if required.
 
-## Explicit legacy rollback configuration
+## Recovery after local homelab retirement
 
-The library default, `config.yaml`, `make run`, and the normal Compose example
-select `encrypted/runtime`. For an existing installation that still serves the
-old layout, explicitly select `config.legacy.yaml` (`make run/legacy`), or set
-`ESS_CONFIG_FILE=./docs/compose-legacy-config.yaml` for Compose. These examples
-retain their generic project/environment scope; configure the intended scope
-and preserve existing credentials and TLS settings for the actual installation.
-
-A homelab layout rollback also needs the coordinated API/bundle-alias values in
-all four Argo charts. Selecting a legacy provider root alone is insufficient.
-Keep legacy data and compatibility fields until their separate retirement gate.
+Legacy examples and `make run/legacy` are removed. Restore matched repositories
+from the baseline revisions in the secrets repository's
+`docs/design/secrets-layout/RETIREMENT.md`; a provider root change alone cannot
+restore coordinated API, aliases, Terraform metadata or live Secret key sets.
+Git stores encrypted blobs, not age identities, live backend state or untracked
+recovery snapshots. Keep those protected. A recovery or live rollout requires
+its own authorization; generic configurable roots and cache recovery remain
+supported independently of this homelab layout retirement.
