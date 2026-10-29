@@ -144,3 +144,37 @@ func TestActiveRootDefaultAndPublishedConfigs(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadConfigurationSizeLimit(t *testing.T) {
+	const limit = 1 << 20
+	base := "git:\n  url: ./repo\nscope:\n  projects: [project]\n  environments: [dev]\n"
+	padded := base + "#" + strings.Repeat("x", limit-len(base)-2) + "\n"
+	for _, tt := range []struct {
+		name, text string
+		wantErr    bool
+	}{
+		{"below limit", padded[:limit-1], false},
+		{"at limit", padded, false},
+		{"oversized comment", padded + "#", true},
+		{"hidden unknown field", padded + "typo: true\n", true},
+		{"hidden second document", padded + "---\n{}\n", true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			filename := filepath.Join(t.TempDir(), "config.yaml")
+			if err := os.WriteFile(filename, []byte(tt.text), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			lookups := 0
+			_, creds, err := Load(filename, func(name string) string {
+				lookups++
+				return name
+			})
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("Load() error = %v, want error = %v", err, tt.wantErr)
+			}
+			if tt.wantErr && (lookups != 0 || creds != (Credentials{})) {
+				t.Fatal("invalid configuration consulted or returned credentials")
+			}
+		})
+	}
+}

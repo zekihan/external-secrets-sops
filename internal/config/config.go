@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -126,7 +127,15 @@ func Load(filename string, getenv func(string) string) (Config, Credentials, err
 		return cfg, Credentials{}, fmt.Errorf("open configuration: %w", err)
 	}
 	defer func() { _ = f.Close() }()
-	dec := yaml.NewDecoder(io.LimitReader(f, 1<<20))
+	const maxConfigurationBytes = 1 << 20
+	data, err := io.ReadAll(io.LimitReader(f, maxConfigurationBytes+1))
+	if err != nil {
+		return cfg, Credentials{}, errors.New("cannot read configuration")
+	}
+	if len(data) > maxConfigurationBytes {
+		return cfg, Credentials{}, errors.New("configuration exceeds size limit")
+	}
+	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
 	if err = dec.Decode(&cfg); err != nil {
 		return cfg, Credentials{}, errors.New("invalid configuration YAML")
