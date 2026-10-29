@@ -178,3 +178,33 @@ func TestLoadConfigurationSizeLimit(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadRejectsUnusableAPITokens(t *testing.T) {
+	filename := filepath.Join(t.TempDir(), "config.yaml")
+	text := "git:\n  url: ./repo\nscope:\n  projects: [project]\n  environments: [dev]\n"
+	if err := os.WriteFile(filename, []byte(text), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, role := range []string{"ESS_READER_TOKEN", "ESS_ADMIN_TOKEN"} {
+		for ch := byte(0); ch <= 127; ch++ {
+			if ch > 32 && ch != 127 {
+				continue
+			}
+			t.Run(fmt.Sprintf("%s/%02x", role, ch), func(t *testing.T) {
+				token := "PRIVATE_CANARY" + string(ch) + "suffix"
+				_, creds, err := Load(filename, func(name string) string {
+					if name == role {
+						return token
+					}
+					return name
+				})
+				if err == nil {
+					t.Fatal("accepted API token that cannot be used in a Bearer header")
+				}
+				if creds != (Credentials{}) || strings.Contains(err.Error(), "PRIVATE_CANARY") {
+					t.Fatal("invalid API token returned or exposed")
+				}
+			})
+		}
+	}
+}

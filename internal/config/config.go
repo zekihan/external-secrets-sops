@@ -162,8 +162,12 @@ func Load(filename string, getenv func(string) string) (Config, Credentials, err
 			"reader and admin tokens must be present and distinct",
 		)
 	}
-	if strings.ContainsAny(creds.Reader+creds.Admin, " \t\r\n") {
-		return cfg, Credentials{}, errors.New("API tokens must not contain whitespace")
+	if strings.ContainsFunc(creds.Reader+creds.Admin, func(r rune) bool {
+		return r <= ' ' || r == 127
+	}) {
+		return cfg, Credentials{}, errors.New(
+			"API tokens must not contain whitespace or control characters",
+		)
 	}
 	if cfg.Redis.Enabled && cfg.Redis.PasswordEnv != "" && creds.Redis == "" {
 		return cfg, Credentials{}, errors.New(
