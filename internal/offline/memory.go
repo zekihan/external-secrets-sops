@@ -8,7 +8,9 @@ import (
 	"math"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/zekihan/external-secrets-sops/internal/config"
 	"github.com/zekihan/external-secrets-sops/internal/source"
@@ -80,11 +82,11 @@ func memoryDocuments(
 			(parts[2] != "base" && !slices.Contains(cfg.Scope.Environments, parts[2])) {
 			return nil, errors.New("memory document outside selected scope")
 		}
-		var value *string
+		var value *memoryDocument
 		if err = decoder.Decode(&value); err != nil || value == nil {
 			return nil, invalid
 		}
-		document := *value
+		document := string(*value)
 		total += int64(len(document))
 		if int64(len(document)) > cfg.Limits.DocumentBytes || total > cfg.Limits.SnapshotBytes {
 			return nil, errors.New("memory document bytes exceed limit")
@@ -106,4 +108,47 @@ func memoryDocuments(
 		return nil, invalid
 	}
 	return docs, nil
+}
+
+// memoryDocument rejects Unicode that encoding/json would silently replace with
+// U+FFFD. Repairing a document at this boundary would change its secret values.
+type memoryDocument string
+
+func (d *memoryDocument) UnmarshalJSON(raw []byte) error {
+	invalid := errors.New("invalid memory documents")
+	if !utf8.Valid(raw) {
+		return invalid
+	}
+	var value string
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return invalid
+	}
+	// Unmarshal has checked JSON syntax, including the length and hex digits of
+	// each escape. Check the surrogate pairing it deliberately tolerates.
+	for i := 0; i < len(raw); i++ {
+		if raw[i] != '\\' {
+			continue
+		}
+		i++
+		if raw[i] != 'u' {
+			continue
+		}
+		unit, _ := strconv.ParseUint(string(raw[i+1:i+5]), 16, 16)
+		i += 4
+		switch {
+		case unit >= 0xdc00 && unit <= 0xdfff:
+			return invalid
+		case unit >= 0xd800 && unit <= 0xdbff:
+			if i+6 >= len(raw) || raw[i+1] != '\\' || raw[i+2] != 'u' {
+				return invalid
+			}
+			low, err := strconv.ParseUint(string(raw[i+3:i+7]), 16, 16)
+			if err != nil || low < 0xdc00 || low > 0xdfff {
+				return invalid
+			}
+			i += 6
+		}
+	}
+	*d = memoryDocument(value)
+	return nil
 }

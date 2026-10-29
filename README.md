@@ -249,9 +249,10 @@ writes no input files. Supply empty environment documents (`"{}\n"`) where a
 bundle inherits its base without overrides. All supplied documents must be inside
 the declared project/environment scope (bases are included); duplicates, invalid
 paths, malformed JSON, oversized inputs and invalid candidates fail before output.
-Only the selected bundle is emitted. Keep stdin/stdout in protected pipes and
-memory when verifying real operator candidates; never save resolver output as CI
-artifacts. The normal template, depth, byte and evaluation limits still apply.
+Document strings with invalid UTF-8 or unpaired Unicode surrogate escapes are
+rejected rather than silently repaired. Only the selected bundle is emitted.
+Keep stdin/stdout in protected pipes and memory when verifying real operator
+candidates; never save resolver output as CI artifacts. The normal template, depth, byte and evaluation limits still apply.
 
 ### Release readiness
 

@@ -270,3 +270,55 @@ func TestMemoryResolveStdinDeadline(t *testing.T) {
 		})
 	}
 }
+
+func TestMemoryResolveUnicodeIntegrity(t *testing.T) {
+	args := []string{
+		"--input", "memory", "--projects", "apps", "--environments", "dev",
+		"--bundle", "apps/app/dev",
+	}
+	for _, tc := range []struct {
+		name, encoded, want string
+	}{
+		{"invalid UTF-8", "\xff", ""},
+		{"truncated UTF-8", "\xe2\x82", ""},
+		{"lone high surrogate", `\ud800`, ""},
+		{"lone low surrogate", `\udc00`, ""},
+		{"high followed by scalar", `\ud800\u0041`, ""},
+		{"reversed pair", `\udc00\ud800`, ""},
+		{"valid pair", `\ud83d\udd10`, "🔐"},
+		{"literal Unicode", "ş🔐", "ş🔐"},
+		{"replacement rune", `\ufffd`, "�"},
+		{"escaped backslash", `\\ud800`, `\ud800`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			input := `{"apps/app/dev/values.yaml":"KEY: '` + tc.encoded + `'\n"}`
+			var out, stderr bytes.Buffer
+			code := runResolveInput(args, strings.NewReader(input), &out, &stderr)
+			if tc.want == "" {
+				if code != 1 || out.Len() != 0 || stderr.String() != "invalid memory documents\n" {
+					t.Fatalf(
+						"malformed Unicode accepted: code=%d stdout=%q stderr=%q",
+						code,
+						out.String(),
+						stderr.String(),
+					)
+				}
+				return
+			}
+			var got map[string]string
+			if err := json.Unmarshal(
+				out.Bytes(),
+				&got,
+			); err != nil || code != 0 || stderr.Len() != 0 ||
+				got["KEY"] != tc.want {
+				t.Fatalf(
+					"Unicode changed: code=%d stdout=%q stderr=%q error=%v",
+					code,
+					out.String(),
+					stderr.String(),
+					err,
+				)
+			}
+		})
+	}
+}
