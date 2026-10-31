@@ -6,6 +6,7 @@ Send `Authorization: Bearer <token>` for authenticated routes. Reader and admin 
 | --- | --- | --- |
 | `GET /v1/secrets/{project}/{config}/{environment}` | reader | `{"data":{"KEY":"value"}}` |
 | `GET /v1/secrets/{project}/{config}/{environment}/{key}` | reader | `{"value":"value"}` |
+| `POST /v1/webhooks/github` | GitHub HMAC-SHA256 | signed ping/filtered push; see below |
 | `POST /v1/refresh` | admin | `202 {"accepted":true,"broadcast":"sent"}` |
 | `GET /v1/status` | admin | instance status, described below |
 | `GET /metrics` | admin | Prometheus text exposition |
@@ -35,3 +36,35 @@ use the offline `resolve` command with an explicit dependency scope instead.
 Bootstrap and private records remain outside the runtime root. Service defaults use
 `encrypted/runtime`. Homelab legacy examples are retired locally. Generic configurable roots remain
 supported; rollback requires matched historical code and encrypted data. See the [execution record](https://github.com/zekihan/argocd/blob/main/docs/secrets-layout-execution-2026-10-27.md).
+
+## GitHub refresh receiver
+
+`POST /v1/webhooks/github` authenticates `X-Hub-Signature-256` (`sha256=<hex>`)
+against the exact raw request body using HMAC-SHA256 and a constant-time digest
+comparison. It does not require a Bearer token. Bodies are limited to 1 MiB
+(413 above the limit); missing or invalid signatures receive 401. Bodies and
+signatures are never logged. Configure GitHub to send JSON (`application/json`).
+
+`auth.githubWebhookSecretEnv` names the environment variable containing the
+shared secret and defaults to `ESS_GITHUB_WEBHOOK_SECRET`. An unset/empty secret
+or empty environment reference disables acceptance (401); startup and other
+routes continue normally. Restart the process after supplying or rotating it.
+
+Signed `ping` events return 200 with `{"message":"pong"}`. Signed `push` events
+must contain `ref`; only `refs/heads/<git.branch>` schedules refresh. Other events
+and branches return 200 with `{"ignored":true}`. Malformed push JSON or a missing
+ref returns 400. The receiver fetches configured Git state; payload contents never
+supply secret data or select a commit to publish.
+
+Matching pushes share the admin refresh trigger and Redis broadcast, returning
+202 with `accepted` and `broadcast` (`sent`, `failed`, or `disabled`). Broadcast
+failure still queues local work and returns 202. This promises eventual refresh,
+not immediate fan-out or completed publication; polling remains the fallback.
+
+Webhook refreshes are limited to one per ten seconds per process, including
+concurrent requests and repeated deliveries with unchanged, changed, or missing
+`X-GitHub-Delivery`. Suppressed pushes return 202 with `{"coalesced":true}` and do
+not trigger or broadcast again. This bound resets on restart and is independent
+per replica. A push suppressed during the interval is eventually picked up by
+polling or a later refresh; the receiver does not schedule a trailing timer.
+Admin refreshes and polling are unaffected.

@@ -109,7 +109,7 @@ SOPS' embedded API does not consistently support cancellation. An operation may 
 
 ## Development
 
-Install Redis server for integration tests, golangci-lint **2.14.0**, and GoReleaser **2.18.3** for release builds.
+Install Redis server for integration tests, golangci-lint **2.15.0**, and GoReleaser **2.19.0** for release builds.
 
 ```sh
 make fmt                 # explicit source formatting
@@ -267,3 +267,5 @@ Container version aliases are emitted only for version tags; main builds retain
 latest and commit tags. The image workflow records the source commit and published
 digest for the operator's release manifest. Published artifact downloads, registry
 digest/source verification and live refresh/restart checks remain operator gates.
+
+GitHub push notifications can use the [signed refresh receiver](docs/api.md#github-refresh-receiver) at `POST /v1/webhooks/github`. Its optional shared secret defaults to `ESS_GITHUB_WEBHOOK_SECRET`; leaving it unset preserves startup and rejects every delivery.

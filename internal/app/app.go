@@ -53,7 +53,15 @@ func Run(
 		broadcaster = notifications
 		wg.Go(func() { notifications.Run(ctx, worker.Trigger) })
 	}
-	api := httpapi.New(store, worker, broadcaster, creds, cfg.Refresh.MaxStaleness, logger)
+	api := httpapi.New(
+		store,
+		worker,
+		broadcaster,
+		creds,
+		cfg.Git.Branch,
+		cfg.Refresh.MaxStaleness,
+		logger,
+	)
 	server := &http.Server{
 		Handler:           api.Handler(),
 		ErrorLog:          serverErrorLog(),

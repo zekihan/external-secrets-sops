@@ -65,8 +65,9 @@ type Redis struct {
 	Channel     string   `yaml:"channel"`
 }
 type Auth struct {
-	ReaderTokenEnv string `yaml:"readerTokenEnv"`
-	AdminTokenEnv  string `yaml:"adminTokenEnv"`
+	ReaderTokenEnv         string `yaml:"readerTokenEnv"`
+	AdminTokenEnv          string `yaml:"adminTokenEnv"`
+	GitHubWebhookSecretEnv string `yaml:"githubWebhookSecretEnv"`
 }
 type Limits struct {
 	DecryptWorkers      int   `yaml:"decryptWorkers"`
@@ -78,10 +79,11 @@ type Limits struct {
 }
 
 type Credentials struct {
-	Reader string
-	Admin  string
-	Git    string
-	Redis  string
+	Reader              string
+	Admin               string
+	Git                 string
+	Redis               string
+	GitHubWebhookSecret string
 }
 
 func Defaults() Config {
@@ -108,7 +110,11 @@ func Defaults() Config {
 			PasswordEnv: "ESS_REDIS_PASSWORD",
 			Channel:     "ess:github-events",
 		},
-		Auth: Auth{ReaderTokenEnv: "ESS_READER_TOKEN", AdminTokenEnv: "ESS_ADMIN_TOKEN"},
+		Auth: Auth{
+			ReaderTokenEnv:         "ESS_READER_TOKEN",
+			AdminTokenEnv:          "ESS_ADMIN_TOKEN",
+			GitHubWebhookSecretEnv: "ESS_GITHUB_WEBHOOK_SECRET",
+		},
 		Limits: Limits{
 			DecryptWorkers:      4,
 			DocumentBytes:       1 << 20,
@@ -150,6 +156,9 @@ func Load(filename string, getenv func(string) string) (Config, Credentials, err
 	creds := Credentials{
 		Reader: getenv(cfg.Auth.ReaderTokenEnv),
 		Admin:  getenv(cfg.Auth.AdminTokenEnv),
+	}
+	if cfg.Auth.GitHubWebhookSecretEnv != "" {
+		creds.GitHubWebhookSecret = getenv(cfg.Auth.GitHubWebhookSecretEnv)
 	}
 	if cfg.Git.TokenEnv != "" {
 		creds.Git = getenv(cfg.Git.TokenEnv)

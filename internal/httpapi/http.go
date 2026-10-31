@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -26,14 +27,18 @@ type Broadcaster interface {
 	Connected() bool
 }
 type API struct {
-	store       *snapshot.Store
-	worker      Refresher
-	broadcaster Broadcaster
-	maxAge      time.Duration
-	reader      [32]byte
-	admin       [32]byte
-	logger      *slog.Logger
-	httpErrors  atomic.Uint64
+	store        *snapshot.Store
+	worker       Refresher
+	broadcaster  Broadcaster
+	maxAge       time.Duration
+	reader       [32]byte
+	admin        [32]byte
+	logger       *slog.Logger
+	httpErrors   atomic.Uint64
+	githubSecret []byte
+	githubRef    string
+	webhookMu    sync.Mutex
+	lastWebhook  time.Time
 }
 
 func New(
@@ -41,17 +46,20 @@ func New(
 	worker Refresher,
 	broadcaster Broadcaster,
 	creds config.Credentials,
+	gitBranch string,
 	maxAge time.Duration,
 	logger *slog.Logger,
 ) *API {
 	return &API{
-		store:       store,
-		worker:      worker,
-		broadcaster: broadcaster,
-		maxAge:      maxAge,
-		reader:      sha256.Sum256([]byte(creds.Reader)),
-		admin:       sha256.Sum256([]byte(creds.Admin)),
-		logger:      logger,
+		githubSecret: []byte(creds.GitHubWebhookSecret),
+		githubRef:    "refs/heads/" + gitBranch,
+		store:        store,
+		worker:       worker,
+		broadcaster:  broadcaster,
+		maxAge:       maxAge,
+		reader:       sha256.Sum256([]byte(creds.Reader)),
+		admin:        sha256.Sum256([]byte(creds.Admin)),
+		logger:       logger,
 	}
 }
 func (a *API) Handler() http.Handler {
@@ -72,6 +80,7 @@ func (a *API) Handler() http.Handler {
 		"/v1/secrets/{project}/{config}/{environment}/{key}",
 		a.auth(false, a.method(http.MethodGet, a.secrets)),
 	)
+	mux.HandleFunc("/v1/webhooks/github", a.method(http.MethodPost, a.githubWebhook))
 	mux.HandleFunc("/v1/refresh", a.auth(true, a.method(http.MethodPost, a.refresh)))
 	mux.HandleFunc("/v1/status", a.auth(true, a.method(http.MethodGet, a.status)))
 	mux.HandleFunc("/metrics", a.auth(true, a.method(http.MethodGet, a.metrics)))

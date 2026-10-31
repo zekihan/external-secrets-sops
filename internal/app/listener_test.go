@@ -131,6 +131,7 @@ func TestListenerTransportPreservesAPIControls(t *testing.T) {
 				transportWorker{},
 				nil,
 				config.Credentials{Reader: "reader", Admin: "admin"},
+				"main",
 				time.Hour,
 				testutil.Logger(),
 			)
