@@ -208,3 +208,35 @@ func TestLoadRejectsUnusableAPITokens(t *testing.T) {
 		}
 	}
 }
+
+func TestGitHubWebhookCredential(t *testing.T) {
+	for _, tt := range []struct{ name, suffix, env, value string }{
+		{"unset", "", "ESS_GITHUB_WEBHOOK_SECRET", ""},
+		{"default", "", "ESS_GITHUB_WEBHOOK_SECRET", "synthetic-secret"},
+		{"named", "auth:\n  githubWebhookSecretEnv: CUSTOM_WEBHOOK_SECRET\n", "CUSTOM_WEBHOOK_SECRET", "synthetic-custom"},
+		{"disabled reference", "auth:\n  githubWebhookSecretEnv: ''\n", "", ""},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			filename := filepath.Join(t.TempDir(), "config.yaml")
+			text := "git:\n  url: ./repo\nscope:\n  projects: [project]\n  environments: [dev]\n" + tt.suffix
+			if err := os.WriteFile(filename, []byte(text), 0600); err != nil {
+				t.Fatal(err)
+			}
+			cfg, creds, err := Load(filename, func(name string) string {
+				if name == tt.env {
+					return tt.value
+				}
+				if name == "ESS_READER_TOKEN" || name == "ESS_ADMIN_TOKEN" {
+					return name
+				}
+				return ""
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.Auth.GitHubWebhookSecretEnv != tt.env || creds.GitHubWebhookSecret != tt.value {
+				t.Fatal("webhook credential reference mismatch")
+			}
+		})
+	}
+}

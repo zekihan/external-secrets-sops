@@ -43,6 +43,7 @@ func TestRouter(t *testing.T) {
 		worker,
 		failingBroadcast{},
 		config.Credentials{Reader: "reader", Admin: "admin"},
+		"main",
 		time.Hour,
 		testutil.Logger(),
 	)

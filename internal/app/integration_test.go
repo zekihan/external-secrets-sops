@@ -3,7 +3,11 @@ package app
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -65,7 +69,7 @@ func TestTwoReplicaRedisRecovery(t *testing.T) {
 		go func() { worker.Run(ctx); close(done) }()
 		go bus.Run(ctx, worker.Trigger)
 		servers[i] = httptest.NewServer(
-			httpapi.New(stores[i], worker, bus, config.Credentials{Reader: "reader", Admin: "admin"}, 0, testutil.Logger()).
+			httpapi.New(stores[i], worker, bus, config.Credentials{Reader: "reader", Admin: "admin", GitHubWebhookSecret: "synthetic-webhook"}, cfg.Git.Branch, 0, testutil.Logger()).
 				Handler(),
 		)
 		t.Cleanup(servers[i].Close)
@@ -87,13 +91,17 @@ func TestTwoReplicaRedisRecovery(t *testing.T) {
 		remote,
 		map[string][]byte{path: testutil.Encrypt(t, "value: second")},
 	)
+	payload := []byte(fmt.Sprintf(`{"ref":%q}`, "refs/heads/"+cfg.Git.Branch))
+	mac := hmac.New(sha256.New, []byte("synthetic-webhook"))
+	_, _ = mac.Write(payload)
 	req, _ := http.NewRequestWithContext(
 		t.Context(),
 		"POST",
-		servers[0].URL+"/v1/refresh",
-		http.NoBody,
+		servers[0].URL+"/v1/webhooks/github",
+		bytes.NewReader(payload),
 	)
-	req.Header.Set("Authorization", "Bearer admin")
+	req.Header.Set("X-GitHub-Event", "push")
+	req.Header.Set("X-Hub-Signature-256", "sha256="+hex.EncodeToString(mac.Sum(nil)))
 	response, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -175,7 +183,9 @@ func TestShutdownWithoutGit(t *testing.T) {
 	cfg.Server.ShutdownTimeout = 100 * time.Millisecond
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan error, 1)
-	go func() { done <- Run(ctx, cfg, config.Credentials{Reader: "reader", Admin: "admin"}, testutil.Logger()) }()
+	go func() {
+		done <- Run(ctx, cfg, config.Credentials{Reader: "reader", Admin: "admin", GitHubWebhookSecret: "synthetic-webhook"}, testutil.Logger())
+	}()
 	cancel()
 	select {
 	case err := <-done:
