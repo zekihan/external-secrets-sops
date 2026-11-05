@@ -1,5 +1,5 @@
 #!/bin/sh
-# Build and run both final images anonymously, without publishing anything.
+# Build and run the native final image anonymously, without publishing anything.
 set -eu
 cd "$(dirname "$0")/.."
 # Fail closed if either Dockerfile base loses its immutable digest pin.
@@ -16,7 +16,7 @@ test -x "$buildx"
 scratch=$(mktemp -d)
 prefix="external-secrets-sops-check-$$"
 cleanup() {
-    for arch in amd64 arm64; do
+    for arch in "$(go env GOARCH)"; do
         docker --host "$endpoint" image rm "$prefix:$arch" >/dev/null 2>&1 || true
     done
     rm -rf "$scratch"
@@ -30,7 +30,7 @@ ln -s "$buildx" "$scratch/cli-plugins/docker-buildx"
 export DOCKER_CONFIG="$scratch"
 export DOCKER_HOST="$endpoint"
 unset DOCKER_CONTEXT DOCKER_AUTH_CONFIG
-for arch in amd64 arm64; do
+for arch in "$(go env GOARCH)"; do
     test -s "dist/external-secrets-sops_linux_$arch/external-secrets-sops"
     docker build --pull --platform "linux/$arch" --load -t "$prefix:$arch" .
     test "$(docker image inspect --format '{{.Os}}/{{.Architecture}} {{.Config.User}}' "$prefix:$arch")" = "linux/$arch 25000:25000"

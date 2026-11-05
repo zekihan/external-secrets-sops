@@ -269,3 +269,5 @@ digest for the operator's release manifest. Published artifact downloads, regist
 digest/source verification and live refresh/restart checks remain operator gates.
 
 GitHub push notifications can use the [signed refresh receiver](docs/api.md#github-refresh-receiver) at `POST /v1/webhooks/github`. Its optional shared secret defaults to `ESS_GITHUB_WEBHOOK_SECRET`; leaving it unset preserves startup and rejects every delivery.
+
+Publishing and manual recovery: [Publishing](docs/publishing.md).

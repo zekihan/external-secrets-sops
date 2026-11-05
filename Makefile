@@ -52,7 +52,6 @@ release: check-release-tools
 	@test "$$(git describe --exact-match --tags HEAD)" = "v$(RELEASE_VERSION)" || (echo "Release tag must match VERSION" && exit 1)
 	goreleaser release --clean --skip=publish,announce
 	python3 scripts/check_release.py dist --version "$(RELEASE_VERSION)" --commit "$$(git rev-parse HEAD)"
-	goreleaser release --clean
 
 # Requires Linux binaries from build/all or build/release/docker and a local Docker engine.
 .PHONY: test/container
