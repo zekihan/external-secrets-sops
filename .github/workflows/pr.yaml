@@ -40,6 +40,9 @@ jobs:
           cache: true
           cache-dependency-path: go.sum
 
+      - name: Check for reachable Go vulnerabilities
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+
       - name: Set up GoReleaser
         uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
         with:
