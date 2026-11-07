@@ -86,7 +86,7 @@ func TestListenRejectsUnsafeTransport(t *testing.T) {
 		{Address: cfg.Address, TLSCertFile: cfg.TLSCertFile, TLSKeyFile: filepath.Join(t.TempDir(), "missing")},
 		{Address: cfg.Address, TLSCertFile: cfg.TLSKeyFile, TLSKeyFile: cfg.TLSKeyFile},
 	} {
-		listener, err := listen(bad)
+		listener, _, err := listen(bad, testutil.Logger())
 		if err == nil {
 			listener.Close()
 			t.Fatal("accepted invalid TLS configuration")
@@ -122,13 +122,14 @@ func TestListenerTransportPreservesAPIControls(t *testing.T) {
 				serverCfg, client = testTLSFiles(t)
 				scheme = "https://"
 			}
-			listener, err := listen(serverCfg)
+			listener, _, err := listen(serverCfg, testutil.Logger())
 			if err != nil {
 				t.Fatal(err)
 			}
 			api := httpapi.New(
 				store,
 				transportWorker{},
+				nil,
 				nil,
 				config.Credentials{Reader: "reader", Admin: "admin"},
 				"main",
@@ -226,5 +227,62 @@ func TestListenerTransportPreservesAPIControls(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestListenerServesRotatedCertificateWithoutRestart(t *testing.T) {
+	ca := testutil.NewCA(t)
+	dir := t.TempDir()
+	certPEM, keyPEM := ca.Issue(t, 100)
+	testutil.WriteSecretVolume(t, dir, map[string][]byte{"tls.crt": certPEM, "tls.key": keyPEM})
+	listener, reloader, err := listen(config.Server{
+		Address:     "127.0.0.1:0",
+		TLSCertFile: filepath.Join(dir, "tls.crt"),
+		TLSKeyFile:  filepath.Join(dir, "tls.key"),
+	}, testutil.Logger())
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewUnstartedServer(
+		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = io.WriteString(w, "ok")
+		}),
+	)
+	server.Listener.Close()
+	server.Listener = listener
+	server.Start()
+	defer server.Close()
+	go reloader.Run(t.Context(), 5*time.Millisecond)
+
+	served := func() int64 {
+		t.Helper()
+		// Each call is a fresh handshake: no session resumption or pooled connection.
+		conn, err := tls.Dial("tcp", listener.Addr().String(), &tls.Config{
+			RootCAs:    ca.Pool,
+			ServerName: "127.0.0.1",
+			MinVersion: tls.VersionTLS12,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer conn.Close()
+		return conn.ConnectionState().PeerCertificates[0].SerialNumber.Int64()
+	}
+	if got := served(); got != 100 {
+		t.Fatalf("initial serial = %d", got)
+	}
+	certPEM, keyPEM = ca.Issue(t, 101)
+	testutil.WriteSecretVolume(t, dir, map[string][]byte{"tls.crt": certPEM, "tls.key": keyPEM})
+	testutil.Eventually(t, func() bool { return served() == 101 })
+
+	// A broken update keeps the last valid certificate serving.
+	testutil.WriteSecretVolume(
+		t,
+		dir,
+		map[string][]byte{"tls.crt": []byte("junk"), "tls.key": keyPEM},
+	)
+	testutil.Eventually(t, func() bool { return reloader.Status().Failing })
+	if got := served(); got != 101 {
+		t.Fatalf("serial after invalid update = %d", got)
 	}
 }

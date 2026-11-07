@@ -69,7 +69,7 @@ func TestTwoReplicaRedisRecovery(t *testing.T) {
 		go func() { worker.Run(ctx); close(done) }()
 		go bus.Run(ctx, worker.Trigger)
 		servers[i] = httptest.NewServer(
-			httpapi.New(stores[i], worker, bus, config.Credentials{Reader: "reader", Admin: "admin", GitHubWebhookSecret: "synthetic-webhook"}, cfg.Git.Branch, 0, testutil.Logger()).
+			httpapi.New(stores[i], worker, bus, nil, config.Credentials{Reader: "reader", Admin: "admin", GitHubWebhookSecret: "synthetic-webhook"}, cfg.Git.Branch, 0, testutil.Logger()).
 				Handler(),
 		)
 		t.Cleanup(servers[i].Close)
