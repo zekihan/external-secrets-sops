@@ -3,33 +3,36 @@ package app
 import (
 	"crypto/tls"
 	"errors"
+	"log/slog"
 	"net"
 
+	"github.com/zekihan/external-secrets-sops/internal/certs"
 	"github.com/zekihan/external-secrets-sops/internal/config"
 )
 
 // listen enforces transport policy even when Run is called without config.Load.
-func listen(cfg config.Server) (net.Listener, error) {
+// The returned reloader is nil for loopback HTTP listeners.
+func listen(cfg config.Server, logger *slog.Logger) (net.Listener, *certs.Reloader, error) {
 	if err := cfg.Validate(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	var tlsConfig *tls.Config
+	var reloader *certs.Reloader
 	if cfg.TLSCertFile != "" {
-		certificate, err := tls.LoadX509KeyPair(cfg.TLSCertFile, cfg.TLSKeyFile)
+		var err error
+		reloader, err = certs.New(cfg.TLSCertFile, cfg.TLSKeyFile, logger)
 		if err != nil {
-			return nil, errors.New("cannot load server TLS certificate and key")
-		}
-		tlsConfig = &tls.Config{
-			Certificates: []tls.Certificate{certificate},
-			MinVersion:   tls.VersionTLS12,
+			return nil, nil, err
 		}
 	}
 	listener, err := net.Listen("tcp", cfg.Address)
 	if err != nil {
-		return nil, errors.New("cannot listen on server address")
+		return nil, nil, errors.New("cannot listen on server address")
 	}
-	if tlsConfig != nil {
-		return tls.NewListener(listener, tlsConfig), nil
+	if reloader != nil {
+		return tls.NewListener(listener, &tls.Config{
+			GetCertificate: reloader.GetCertificate,
+			MinVersion:     tls.VersionTLS12,
+		}), reloader, nil
 	}
-	return listener, nil
+	return listener, nil, nil
 }

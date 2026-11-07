@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/zekihan/external-secrets-sops/internal/certs"
 	"github.com/zekihan/external-secrets-sops/internal/config"
 	"github.com/zekihan/external-secrets-sops/internal/snapshot"
 	"github.com/zekihan/external-secrets-sops/internal/source"
@@ -42,6 +43,7 @@ func TestRouter(t *testing.T) {
 		store,
 		worker,
 		failingBroadcast{},
+		nil,
 		config.Credentials{Reader: "reader", Admin: "admin"},
 		"main",
 		time.Hour,
@@ -110,5 +112,78 @@ func TestRouter(t *testing.T) {
 		if rr.Code != 503 {
 			t.Fatal("served stale snapshot")
 		}
+	}
+}
+
+type fakeCertificates certs.Status
+
+func (f fakeCertificates) Status() certs.Status { return certs.Status(f) }
+
+func TestCertificateStatusAndMetrics(t *testing.T) {
+	notAfter := time.Unix(1900000000, 0).UTC()
+	api := New(
+		new(snapshot.Store),
+		new(fakeWorker),
+		nil,
+		fakeCertificates{
+			Successes: 2,
+			Failures:  1,
+			Failing:   true,
+			NotAfter:  notAfter,
+			SerialHex: "2a",
+		},
+		config.Credentials{Reader: "reader", Admin: "admin"},
+		"main",
+		0,
+		testutil.Logger(),
+	)
+	get := func(path string) string {
+		t.Helper()
+		req := httptest.NewRequest("GET", path, http.NoBody)
+		req.Header.Set("Authorization", "Bearer admin")
+		rr := httptest.NewRecorder()
+		api.Handler().ServeHTTP(rr, req)
+		if rr.Code != 200 {
+			t.Fatalf("%s: %d", path, rr.Code)
+		}
+		return rr.Body.String()
+	}
+	metrics := get("/metrics")
+	for _, want := range []string{
+		"ess_tls_reload_total{outcome=\"success\"} 2\n",
+		"ess_tls_reload_total{outcome=\"failure\"} 1\n",
+		"ess_tls_reload_failing 1\n",
+		"ess_tls_certificate_expiry_timestamp_seconds 1900000000\n",
+	} {
+		if !strings.Contains(metrics, want) {
+			t.Fatalf("metrics missing %q:\n%s", want, metrics)
+		}
+	}
+	var status struct {
+		TLS *certs.Status `json:"tls"`
+	}
+	if err := json.Unmarshal([]byte(get("/v1/status")), &status); err != nil {
+		t.Fatal(err)
+	}
+	if status.TLS == nil || status.TLS.SerialHex != "2a" || !status.TLS.NotAfter.Equal(notAfter) {
+		t.Fatalf("status tls = %+v", status.TLS)
+	}
+
+	plain := New(
+		new(snapshot.Store),
+		new(fakeWorker),
+		nil,
+		nil,
+		config.Credentials{Admin: "admin"},
+		"main",
+		0,
+		testutil.Logger(),
+	)
+	req := httptest.NewRequest("GET", "/metrics", http.NoBody)
+	req.Header.Set("Authorization", "Bearer admin")
+	rr := httptest.NewRecorder()
+	plain.Handler().ServeHTTP(rr, req)
+	if strings.Contains(rr.Body.String(), "ess_tls_") {
+		t.Fatal("TLS metrics without TLS listener")
 	}
 }

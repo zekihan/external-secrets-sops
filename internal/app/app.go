@@ -18,6 +18,9 @@ import (
 	"github.com/zekihan/external-secrets-sops/internal/syncer"
 )
 
+// certificateReloadInterval is short relative to kubelet Secret volume propagation.
+const certificateReloadInterval = 30 * time.Second
+
 func Run(
 	ctx context.Context,
 	cfg config.Config,
@@ -28,7 +31,7 @@ func Run(
 	if err != nil {
 		return err
 	}
-	listener, err := listen(cfg.Server)
+	listener, certificates, err := listen(cfg.Server, logger)
 	if err != nil {
 		return err
 	}
@@ -47,6 +50,11 @@ func Run(
 	var notifications *notify.Redis
 	var wg sync.WaitGroup
 	wg.Go(func() { worker.Run(ctx) })
+	var certificateStatus httpapi.Certificates
+	if certificates != nil {
+		certificateStatus = certificates
+		wg.Go(func() { certificates.Run(ctx, certificateReloadInterval) })
+	}
 	if cfg.Redis.Enabled {
 		notifications = notify.New(cfg.Redis, creds.Redis, logger)
 		defer func() { _ = notifications.Close() }()
@@ -57,6 +65,7 @@ func Run(
 		store,
 		worker,
 		broadcaster,
+		certificateStatus,
 		creds,
 		cfg.Git.Branch,
 		cfg.Refresh.MaxStaleness,

@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/zekihan/external-secrets-sops/internal/certs"
 	"github.com/zekihan/external-secrets-sops/internal/config"
 	"github.com/zekihan/external-secrets-sops/internal/snapshot"
 	"github.com/zekihan/external-secrets-sops/internal/syncer"
@@ -26,10 +27,14 @@ type Broadcaster interface {
 	Broadcast(context.Context) error
 	Connected() bool
 }
+type Certificates interface {
+	Status() certs.Status
+}
 type API struct {
 	store        *snapshot.Store
 	worker       Refresher
 	broadcaster  Broadcaster
+	certificates Certificates
 	maxAge       time.Duration
 	reader       [32]byte
 	admin        [32]byte
@@ -45,6 +50,7 @@ func New(
 	store *snapshot.Store,
 	worker Refresher,
 	broadcaster Broadcaster,
+	certificates Certificates,
 	creds config.Credentials,
 	gitBranch string,
 	maxAge time.Duration,
@@ -56,6 +62,7 @@ func New(
 		store:        store,
 		worker:       worker,
 		broadcaster:  broadcaster,
+		certificates: certificates,
 		maxAge:       maxAge,
 		reader:       sha256.Sum256([]byte(creds.Reader)),
 		admin:        sha256.Sum256([]byte(creds.Admin)),
@@ -221,14 +228,15 @@ func (a *API) refresh(w http.ResponseWriter, r *http.Request) {
 func (a *API) status(w http.ResponseWriter, _ *http.Request) {
 	type status struct {
 		syncer.Status
-		Revision       string     `json:"revision"`
-		ValidatedAt    *time.Time `json:"validatedAt"`
-		AgeSeconds     float64    `json:"ageSeconds"`
-		Documents      int        `json:"documents"`
-		Bytes          int64      `json:"bytes"`
-		Ready          bool       `json:"ready"`
-		RedisEnabled   bool       `json:"redisEnabled"`
-		RedisConnected bool       `json:"redisConnected"`
+		Revision       string        `json:"revision"`
+		ValidatedAt    *time.Time    `json:"validatedAt"`
+		AgeSeconds     float64       `json:"ageSeconds"`
+		Documents      int           `json:"documents"`
+		Bytes          int64         `json:"bytes"`
+		Ready          bool          `json:"ready"`
+		RedisEnabled   bool          `json:"redisEnabled"`
+		RedisConnected bool          `json:"redisConnected"`
+		TLS            *certs.Status `json:"tls,omitempty"`
 	}
 	s := status{
 		Status:       a.worker.Status(),
@@ -237,6 +245,10 @@ func (a *API) status(w http.ResponseWriter, _ *http.Request) {
 	}
 	if a.broadcaster != nil {
 		s.RedisConnected = a.broadcaster.Connected()
+	}
+	if a.certificates != nil {
+		tlsStatus := a.certificates.Status()
+		s.TLS = &tlsStatus
 	}
 	if current := a.store.Load(); current != nil {
 		at := current.ValidatedAt()
@@ -265,6 +277,22 @@ func (a *API) metrics(w http.ResponseWriter, _ *http.Request) {
 		connected = 1
 	}
 	_, _ = fmt.Fprintf(w, "# TYPE ess_redis_connected gauge\ness_redis_connected %d\n", connected)
+	if a.certificates != nil {
+		c := a.certificates.Status()
+		failing := 0
+		if c.Failing {
+			failing = 1
+		}
+		_, _ = fmt.Fprintf(
+			w,
+			"# TYPE ess_tls_reload_total counter\ness_tls_reload_total{outcome=\"success\"} %d\ness_tls_reload_total{outcome=\"failure\"} %d\n# TYPE ess_tls_reload_failing gauge\ness_tls_reload_failing %d\n# TYPE ess_tls_certificate_loaded_timestamp_seconds gauge\ness_tls_certificate_loaded_timestamp_seconds %d\n# TYPE ess_tls_certificate_expiry_timestamp_seconds gauge\ness_tls_certificate_expiry_timestamp_seconds %d\n",
+			c.Successes,
+			c.Failures,
+			failing,
+			c.LoadedAt.Unix(),
+			c.NotAfter.Unix(),
+		)
+	}
 	if current := a.store.Load(); current != nil {
 		_, _ = fmt.Fprintf(
 			w,
