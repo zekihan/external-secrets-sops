@@ -26,6 +26,6 @@ LABEL org.opencontainers.image.authors="zekihan@noqer.com" \
     org.opencontainers.image.documentation="https://docs.noqer.com/" \
     org.opencontainers.image.source="https://github.com/zekihan/external-secrets-sops" \
     org.opencontainers.image.vendor="Zekihan AZMAN" \
-    org.opencontainers.image.licenses="AGPL-3.0" \
+    org.opencontainers.image.licenses="AGPL-3.0-only" \
     org.opencontainers.image.title="External Secrets Sops" \
     org.opencontainers.image.description="External Secrets Sops is a tool that helps you to manage your secrets in Kubernetes with Sops."
