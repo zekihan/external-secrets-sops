@@ -2,15 +2,29 @@ version: "2"
 run:
   timeout: 5m
   tests: true
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
 linters:
   default: standard
   enable:
+    - bodyclose
+    - copyloopvar
+    - durationcheck
     - errorlint
     - forbidigo
+    - misspell
+    - nilerr
     - sloglint
     - tagalign
     - depguard
+    - unconvert
   settings:
+    errcheck:
+      exclude-functions:
+        - fmt.Fprintln
+    misspell:
+      locale: US
     depguard:
       rules:
         main:
@@ -36,6 +50,10 @@ linters:
       align: true
       sort: true
   exclusions:
+    generated: lax
+    presets:
+      - common-false-positives
+      - std-error-handling
     rules:
       - path: main.go
         linters: [forbidigo]
@@ -45,6 +63,8 @@ linters:
         linters: [errcheck]
 formatters:
   enable: [gofmt, gci, golines]
+  exclusions:
+    generated: lax
   settings:
     golines:
       max-len: 100
