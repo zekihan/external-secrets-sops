@@ -2,6 +2,8 @@ FROM --platform=$BUILDPLATFORM busybox:1.38.0@sha256:a46257e06c82ad85242d0d38077
 
 ARG TARGETPLATFORM
 
+WORKDIR /build
+
 COPY ./dist ./dist
 
 RUN case ${TARGETPLATFORM} in \
