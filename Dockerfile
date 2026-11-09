@@ -13,7 +13,7 @@ RUN case ${TARGETPLATFORM} in \
     esac && \
     cp ./dist/external-secrets-sops_linux_${ARCH}/external-secrets-sops /usr/bin/external-secrets-sops
 
-FROM --platform=$TARGETPLATFORM ghcr.io/zekihan/distroless:1.0.0-r1@sha256:af9aab3cd99d1f40bca0b21ec21fe4da082422a5bc148b152c35a45802c69a2a AS final
+FROM ghcr.io/zekihan/distroless:1.0.0-r1@sha256:af9aab3cd99d1f40bca0b21ec21fe4da082422a5bc148b152c35a45802c69a2a AS final
 
 COPY --from=builder /usr/bin/external-secrets-sops /usr/bin/external-secrets-sops
 
