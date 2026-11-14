@@ -143,7 +143,7 @@ func (b *Builder) Build(
 			encrypted[i] = docs[i].Encrypted
 		}
 		if err := validator.ValidateCandidate(ctx, encrypted); err != nil {
-			return nil, errors.New("secret candidate metadata rejected")
+			return nil, fmt.Errorf("secret candidate metadata rejected: %w", err)
 		}
 	}
 	parsed := make([]map[string]scalar, len(docs))

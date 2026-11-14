@@ -83,7 +83,7 @@ func Resolve(ctx context.Context, opts Options) (map[string]string, error) {
 		d = synthetic{}
 	default:
 		docs, err = source.LocalDocuments(ctx, cfg, opts.Repo, opts.Revision)
-		d = decrypt.SOPS{}
+		d = decrypt.SOPS{CandidateRecipients: cfg.Limits.CandidateRecipients}
 	}
 	if err != nil {
 		return nil, err

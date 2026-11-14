@@ -28,6 +28,7 @@ auth:
   readerTokenEnv: ESS_READER_TOKEN
   adminTokenEnv: ESS_ADMIN_TOKEN
 limits:
+  candidateRecipients: 4096
   decryptWorkers: 4
   documentBytes: 1048576
   snapshotBytes: 33554432

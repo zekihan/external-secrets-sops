@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 
@@ -18,16 +19,21 @@ import (
 )
 
 const (
-	maxKeyGroups           = 4
-	maxDocumentRecipients  = 16
-	maxCandidateRecipients = 256
+	maxKeyGroups               = 4
+	maxDocumentRecipients      = 16
+	defaultCandidateRecipients = 4096
 )
 
 // ValidateCandidate checks the entire candidate before any credential discovery
 // or key recovery. Remote backends are deliberately unsupported: SOPS' stable
 // decrypt API cannot enforce deadlines on their calls. Limits count all keys,
-// including fallback recipients that might never be tried.
-func (SOPS) ValidateCandidate(ctx context.Context, documents [][]byte) error {
+// including fallback recipients that might never be tried. A zero
+// CandidateRecipients uses the default budget.
+func (s SOPS) ValidateCandidate(ctx context.Context, documents [][]byte) error {
+	limit := s.CandidateRecipients
+	if limit == 0 {
+		limit = defaultCandidateRecipients
+	}
 	total := 0
 	for _, document := range documents {
 		if err := ctx.Err(); err != nil {
@@ -38,8 +44,11 @@ func (SOPS) ValidateCandidate(ctx context.Context, documents [][]byte) error {
 			return errors.New("SOPS metadata violates local backend or work policy")
 		}
 		total += n
-		if total > maxCandidateRecipients {
-			return errors.New("SOPS candidate exceeds recipient work budget")
+		if total > limit {
+			return fmt.Errorf(
+				"SOPS candidate exceeds recipient work budget of %d entries",
+				limit,
+			)
 		}
 	}
 	return ctx.Err()

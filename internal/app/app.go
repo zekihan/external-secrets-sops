@@ -42,7 +42,10 @@ func Run(
 	worker := syncer.New(
 		cfg.Refresh,
 		repository,
-		snapshot.NewBuilder(cfg, decrypt.SOPS{}),
+		snapshot.NewBuilder(
+			cfg,
+			decrypt.SOPS{CandidateRecipients: cfg.Limits.CandidateRecipients},
+		),
 		store,
 		logger,
 	)

@@ -19,6 +19,7 @@ import (
 	yamlstore "github.com/getsops/sops/v3/stores/yaml"
 	"go.yaml.in/yaml/v3"
 
+	"github.com/zekihan/external-secrets-sops/internal/config"
 	"github.com/zekihan/external-secrets-sops/internal/testutil"
 )
 
@@ -167,18 +168,55 @@ func TestRecipientAndGroupBudgets(t *testing.T) {
 		t.Fatal("aggregate recipients across groups exceeded the document budget")
 	}
 	fixture := testutil.Encrypt(t, "value: fixture\n")
-	documents := make([][]byte, maxCandidateRecipients+1)
+	const budget = 8
+	documents := make([][]byte, budget+1)
 	for i := range documents {
 		documents[i] = fixture
 	}
-	if err := (SOPS{}).ValidateCandidate(
-		t.Context(),
-		documents[:maxCandidateRecipients],
-	); err != nil {
+	policy := SOPS{CandidateRecipients: budget}
+	if err := policy.ValidateCandidate(t.Context(), documents[:budget]); err != nil {
 		t.Fatalf("candidate boundary rejected: %v", err)
 	}
-	if err := (SOPS{}).ValidateCandidate(t.Context(), documents); err == nil {
+	if err := policy.ValidateCandidate(t.Context(), documents); err == nil {
 		t.Fatal("excess candidate work accepted")
+	}
+}
+
+func TestDefaultCandidateBudgetMatchesConfig(t *testing.T) {
+	if got := config.Defaults().Limits.CandidateRecipients; got != defaultCandidateRecipients {
+		t.Fatalf("config default %d, policy default %d", got, defaultCandidateRecipients)
+	}
+}
+
+// A dual-recipient rotation of every document must fit the default budget
+// even when the documents alone exceed the former fixed limit of 256.
+func TestDualRecipientRotationWithinDefaultBudget(t *testing.T) {
+	next, err := age.GenerateX25519Identity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	rotated := testutil.EncryptRecipients(
+		t,
+		"canary: fixture-only-value\n",
+		next.Recipient().String(),
+		testutil.FixtureRecipient,
+	)
+	documents := make([][]byte, defaultCandidateRecipients/2)
+	for i := range documents {
+		documents[i] = rotated
+	}
+	if err := (SOPS{}).ValidateCandidate(t.Context(), documents); err != nil {
+		t.Fatalf("dual-recipient candidate rejected: %v", err)
+	}
+	if err := (SOPS{}).ValidateCandidate(
+		t.Context(),
+		append(documents, rotated),
+	); err == nil {
+		t.Fatal("candidate above the default budget accepted")
+	}
+	plain, err := (SOPS{}).Decrypt(t.Context(), rotated)
+	if err != nil || !bytes.Contains(plain, []byte("fixture-only-value")) {
+		t.Fatalf("fallback recipient did not decrypt: %v", err)
 	}
 }
 

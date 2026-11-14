@@ -95,7 +95,7 @@ func TestServerTransport(t *testing.T) {
 	}
 }
 
-func TestTemplateLimitConfiguration(t *testing.T) {
+func TestConfigurableLimits(t *testing.T) {
 	for _, tt := range []struct {
 		field  string
 		values []int64
@@ -103,6 +103,7 @@ func TestTemplateLimitConfiguration(t *testing.T) {
 		{"templateDepth", []int64{0, -1, 1, 32, 128, 129}},
 		{"templateValueBytes", []int64{0, -1, 1, 1 << 20, 16 << 20, (16 << 20) + 1}},
 		{"templateEvaluations", []int64{0, -1, 1, 100000, 1000000, 1000001}},
+		{"candidateRecipients", []int64{0, -1, 1, 4096, 65536, 65537}},
 	} {
 		for i, value := range tt.values {
 			path := filepath.Join(t.TempDir(), "config.yaml")

@@ -7,7 +7,9 @@ import (
 	"github.com/getsops/sops/v3/decrypt"
 )
 
-type SOPS struct{}
+type SOPS struct {
+	CandidateRecipients int
+}
 
 func (SOPS) Decrypt(ctx context.Context, encrypted []byte) (plain []byte, err error) {
 	defer func() {
@@ -19,8 +21,8 @@ func (SOPS) Decrypt(ctx context.Context, encrypted []byte) (plain []byte, err er
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if err := (SOPS{}).ValidateCandidate(ctx, [][]byte{encrypted}); err != nil {
-		return nil, err
+	if _, err := validateDocument(encrypted); err != nil {
+		return nil, errors.New("SOPS metadata violates local backend or work policy")
 	}
 	plain, err = decrypt.Data(encrypted, "yaml")
 	if err != nil {

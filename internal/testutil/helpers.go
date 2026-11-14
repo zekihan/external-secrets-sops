@@ -40,22 +40,40 @@ func Encrypt(t testing.TB, plain string) []byte {
 	return EncryptGroups(t, plain, 1)
 }
 
+// FixtureRecipient matches the public fixture identity in testdata/key.txt.
+const FixtureRecipient = "age17jc9ncn8vpajqjq3sfcpuyp30netw68qm3jnmez6asngdeg0zd6qcqv2nd"
+
 func EncryptGroups(t testing.TB, plain string, count int) []byte {
+	t.Helper()
+	groups := make([][]string, count)
+	for i := range groups {
+		groups[i] = []string{FixtureRecipient}
+	}
+	return encrypt(t, plain, groups)
+}
+
+// EncryptRecipients encrypts one key group to recipients in SOPS try order.
+func EncryptRecipients(t testing.TB, plain string, recipients ...string) []byte {
+	t.Helper()
+	return encrypt(t, plain, [][]string{recipients})
+}
+
+func encrypt(t testing.TB, plain string, recipients [][]string) []byte {
 	t.Helper()
 	store := yamlstore.NewStore(&sopsconfig.YAMLStoreConfig{Indent: 2})
 	branches, err := store.LoadPlainFile([]byte(plain))
 	if err != nil {
 		t.Fatal(err)
 	}
-	groups := make([]sops.KeyGroup, count)
-	for i := range groups {
-		key, keyErr := age.MasterKeyFromRecipient(
-			"age17jc9ncn8vpajqjq3sfcpuyp30netw68qm3jnmez6asngdeg0zd6qcqv2nd",
-		)
-		if keyErr != nil {
-			t.Fatal(keyErr)
+	groups := make([]sops.KeyGroup, len(recipients))
+	for i, group := range recipients {
+		for _, recipient := range group {
+			key, keyErr := age.MasterKeyFromRecipient(recipient)
+			if keyErr != nil {
+				t.Fatal(keyErr)
+			}
+			groups[i] = append(groups[i], key)
 		}
-		groups[i] = sops.KeyGroup{key}
 	}
 	tree := sops.Tree{
 		Branches: branches,

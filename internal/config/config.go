@@ -70,6 +70,7 @@ type Auth struct {
 	GitHubWebhookSecretEnv string `yaml:"githubWebhookSecretEnv"`
 }
 type Limits struct {
+	CandidateRecipients int   `yaml:"candidateRecipients"`
 	DecryptWorkers      int   `yaml:"decryptWorkers"`
 	DocumentBytes       int64 `yaml:"documentBytes"`
 	SnapshotBytes       int64 `yaml:"snapshotBytes"`
@@ -116,6 +117,7 @@ func Defaults() Config {
 			GitHubWebhookSecretEnv: "ESS_GITHUB_WEBHOOK_SECRET",
 		},
 		Limits: Limits{
+			CandidateRecipients: 4096,
 			DecryptWorkers:      4,
 			DocumentBytes:       1 << 20,
 			SnapshotBytes:       32 << 20,
@@ -278,6 +280,9 @@ func (c Config) Validate() error {
 		c.Limits.TemplateEvaluations < 1 ||
 		c.Limits.TemplateEvaluations > 1000000 {
 		return errors.New("invalid template limits")
+	}
+	if c.Limits.CandidateRecipients < 1 || c.Limits.CandidateRecipients > 65536 {
+		return errors.New("invalid candidate recipient limit")
 	}
 	if c.Redis.Enabled && (len(c.Redis.Addresses) == 0 || c.Redis.Channel == "" || c.Redis.DB < 0) {
 		return errors.New("invalid Redis configuration")

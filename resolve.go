@@ -37,6 +37,12 @@ func runResolveInput(args []string, stdin io.Reader, stdout, stderr io.Writer) i
 	projects := flags.String("projects", "", "comma-separated dependency projects")
 	environments := flags.String("environments", "", "comma-separated dependency environments")
 	flags.IntVar(
+		&opts.Limits.CandidateRecipients,
+		"candidate-recipients",
+		opts.Limits.CandidateRecipients,
+		"maximum SOPS recipient entries across the candidate",
+	)
+	flags.IntVar(
 		&opts.Limits.DecryptWorkers,
 		"decrypt-workers",
 		opts.Limits.DecryptWorkers,
