@@ -9,6 +9,7 @@ import (
 
 	"filippo.io/age"
 	"filippo.io/age/agessh"
+	"filippo.io/age/armor"
 	sopsage "github.com/getsops/sops/v3/age"
 	sopsconfig "github.com/getsops/sops/v3/config"
 	"github.com/getsops/sops/v3/pgp"
@@ -87,6 +88,9 @@ func validateDocument(encrypted []byte) (int, error) {
 				if !localAgeRecipient(key.Recipient) {
 					return 0, errors.New("unsupported Age recipient")
 				}
+				if !singleAgeStanza(key.EncryptedKey) {
+					return 0, errors.New("unsupported Age data key envelope")
+				}
 			case *pgp.MasterKey:
 				// Keep existing local keyring/GnuPG support. Credential helpers
 				// and agents are configured by the operator, never by Git.
@@ -107,6 +111,14 @@ func localAgeRecipient(recipient string) bool {
 	}
 	_, err := agessh.ParseRecipient(recipient)
 	return err == nil
+}
+
+// singleAgeStanza bounds unwrap work per recipient entry. SOPS writes one
+// stanza per entry, but an age header may hold up to 1,023, and each is tried
+// against every held identity.
+func singleAgeStanza(encrypted string) bool {
+	header, err := age.ExtractHeader(armor.NewReader(strings.NewReader(encrypted)))
+	return err == nil && bytes.Count(header, []byte("\n-> ")) == 1
 }
 
 func validateNode(node *yaml.Node, depth int) error {

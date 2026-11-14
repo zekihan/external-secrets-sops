@@ -5,12 +5,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync/atomic"
 	"testing"
 
+	"filippo.io/age"
+	"filippo.io/age/armor"
 	sopsconfig "github.com/getsops/sops/v3/config"
 	yamlstore "github.com/getsops/sops/v3/stores/yaml"
 	"go.yaml.in/yaml/v3"
@@ -175,6 +179,76 @@ func TestRecipientAndGroupBudgets(t *testing.T) {
 	}
 	if err := (SOPS{}).ValidateCandidate(t.Context(), documents); err == nil {
 		t.Fatal("excess candidate work accepted")
+	}
+}
+
+func TestAgeEntryStanzaLimit(t *testing.T) {
+	data, err := os.ReadFile(os.Getenv("SOPS_AGE_KEY_FILE"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	identities, err := age.ParseIdentities(bytes.NewReader(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture := fixtureMetadata(t)
+	entry := fixture["sops"].(map[string]any)["age"].([]any)[0].(map[string]any)
+	r, err := age.Decrypt(
+		armor.NewReader(strings.NewReader(entry["enc"].(string))),
+		identities...,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dataKey, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reencrypt := func(stanzas int) string {
+		recipients := make([]age.Recipient, stanzas)
+		for i := range recipients[1:] {
+			extra, genErr := age.GenerateX25519Identity()
+			if genErr != nil {
+				t.Fatal(genErr)
+			}
+			recipients[i] = extra.Recipient()
+		}
+		recipients[stanzas-1] = identities[0].(*age.X25519Identity).Recipient()
+		var b strings.Builder
+		a := armor.NewWriter(&b)
+		w, encErr := age.Encrypt(a, recipients...)
+		if encErr != nil {
+			t.Fatal(encErr)
+		}
+		if _, encErr = w.Write(dataKey); encErr != nil {
+			t.Fatal(encErr)
+		}
+		if w.Close() != nil || a.Close() != nil {
+			t.Fatal("cannot finish age envelope")
+		}
+		return b.String()
+	}
+	// The same data key in a one-stanza envelope remains valid, so the
+	// multi-stanza rejection below is due to policy rather than corruption.
+	entry["enc"] = reencrypt(1)
+	plain, err := (SOPS{}).Decrypt(t.Context(), encodeFixture(t, fixture))
+	if err != nil || !bytes.Contains(plain, []byte("fixture-only-value")) {
+		t.Fatalf("single-stanza envelope rejected: %v", err)
+	}
+	for name, enc := range map[string]string{
+		"two stanzas": reencrypt(2),
+		"malformed":   "not an age envelope",
+	} {
+		t.Run(name, func(t *testing.T) {
+			entry["enc"] = enc
+			document := encodeFixture(t, fixture)
+			if err := (SOPS{}).ValidateCandidate(t.Context(), [][]byte{document}); err == nil {
+				t.Fatal("candidate accepted")
+			}
+			if plain, err := (SOPS{}).Decrypt(t.Context(), document); err == nil || plain != nil {
+				t.Fatal("document decrypted")
+			}
+		})
 	}
 }
 
