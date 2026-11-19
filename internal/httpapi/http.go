@@ -190,7 +190,7 @@ func (a *API) secrets(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	current := a.store.Load()
-	if current == nil || (a.maxAge > 0 && time.Since(current.ValidatedAt()) > a.maxAge) {
+	if !current.Ready(time.Now(), a.maxAge) {
 		a.failure(w, 503, "unavailable")
 		return
 	}
@@ -244,7 +244,6 @@ func (a *API) status(w http.ResponseWriter, _ *http.Request) {
 	}
 	s := status{
 		Status:       a.worker.Status(),
-		Ready:        a.store.Ready(time.Now(), a.maxAge),
 		RedisEnabled: a.broadcaster != nil,
 	}
 	if a.broadcaster != nil {
@@ -255,12 +254,14 @@ func (a *API) status(w http.ResponseWriter, _ *http.Request) {
 		s.TLS = &tlsStatus
 	}
 	if current := a.store.Load(); current != nil {
+		now := time.Now()
 		at := current.ValidatedAt()
 		s.Revision = current.Revision()
 		s.ValidatedAt = &at
-		s.AgeSeconds = max(0, time.Since(at).Seconds())
+		s.AgeSeconds = max(0, now.Sub(at).Seconds())
 		s.Documents = current.Count()
 		s.Bytes = current.Bytes()
+		s.Ready = current.Ready(now, a.maxAge)
 	}
 	a.write(w, 200, s)
 }
