@@ -7,10 +7,36 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/iotest"
 
 	"github.com/zekihan/external-secrets-sops/internal/config"
 	"github.com/zekihan/external-secrets-sops/internal/testutil"
 )
+
+func TestMemoryResolutionReadTermination(t *testing.T) {
+	const input = `{"apps/example/dev/values.yaml":"VALUE: synthetic\n"}`
+	opts := Options{
+		Input:        "memory",
+		Projects:     []string{"apps"},
+		Environments: []string{"dev"},
+		Bundle:       "apps/example/dev",
+		Limits:       config.Defaults().Limits,
+	}
+	t.Run("error with final bytes", func(t *testing.T) {
+		opts.Documents = iotest.DataErrReader(iotest.TimeoutReader(strings.NewReader(input)))
+		got, err := Resolve(t.Context(), opts)
+		if got != nil || err == nil || err.Error() != "invalid memory documents" {
+			t.Fatalf("Resolve returned %v, %v after an input read error", got, err)
+		}
+	})
+	t.Run("EOF with final bytes", func(t *testing.T) {
+		opts.Documents = iotest.DataErrReader(strings.NewReader(input))
+		got, err := Resolve(t.Context(), opts)
+		if err != nil || len(got) != 1 || got["VALUE"] != "synthetic" {
+			t.Fatalf("Resolve returned %v, %v for a complete input stream", got, err)
+		}
+	})
+}
 
 func fixture(t *testing.T, files map[string]string) Options {
 	t.Helper()

@@ -47,7 +47,10 @@ func memoryDocuments(
 	if cfg.Limits.SnapshotBytes > (math.MaxInt64-(4<<20))/6 {
 		return nil, errors.New("memory input limit too large")
 	}
-	limited := &io.LimitedReader{R: input, N: cfg.Limits.SnapshotBytes*6 + (4 << 20)}
+	limited := &memoryInput{LimitedReader: io.LimitedReader{
+		R: input,
+		N: cfg.Limits.SnapshotBytes*6 + (4 << 20),
+	}}
 	decoder := json.NewDecoder(limited)
 	token, err := decoder.Token()
 	if err != nil || token != json.Delim('{') {
@@ -108,6 +111,21 @@ func memoryDocuments(
 		return nil, invalid
 	}
 	return docs, nil
+}
+
+// memoryInput retains read errors even when the decoder has enough bytes for a token.
+type memoryInput struct {
+	io.LimitedReader
+	err error
+}
+
+func (r *memoryInput) Read(p []byte) (int, error) {
+	if r.err != nil {
+		return 0, r.err
+	}
+	n, err := r.LimitedReader.Read(p)
+	r.err = err
+	return n, err
 }
 
 // memoryDocument rejects Unicode that encoding/json would silently replace with
