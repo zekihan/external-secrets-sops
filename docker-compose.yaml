@@ -7,10 +7,30 @@ services:
     environment:
       SOPS_AGE_KEY_FILE: /credentials/age.txt
     volumes:
-      - ${ESS_CONFIG_FILE:-./docs/compose-config.yaml}:/config/config.yaml:ro
-      - ${SOPS_AGE_KEY_FILE:?Set SOPS_AGE_KEY_FILE}:/credentials/age.txt:ro
-      - ${ESS_TLS_CERT_FILE:?Set ESS_TLS_CERT_FILE}:/credentials/tls.crt:ro
-      - ${ESS_TLS_KEY_FILE:?Set ESS_TLS_KEY_FILE}:/credentials/tls.key:ro
+      - type: bind
+        source: ${ESS_CONFIG_FILE:-./docs/compose-config.yaml}
+        target: /config/config.yaml
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${SOPS_AGE_KEY_FILE:?Set SOPS_AGE_KEY_FILE}
+        target: /credentials/age.txt
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${ESS_TLS_CERT_FILE:?Set ESS_TLS_CERT_FILE}
+        target: /credentials/tls.crt
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${ESS_TLS_KEY_FILE:?Set ESS_TLS_KEY_FILE}
+        target: /credentials/tls.key
+        read_only: true
+        bind:
+          create_host_path: false
     tmpfs:
       - /data:uid=25000,gid=25000,mode=0700
     user: 25000:25000
