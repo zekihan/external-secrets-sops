@@ -91,6 +91,49 @@ func TestRejectInvalid(t *testing.T) {
 		t.Fatal("size limit ignored")
 	}
 }
+
+func TestRejectMalformedTaggedScalars(t *testing.T) {
+	builder := NewBuilder(testutil.Config(t), testutil.Plain{})
+	const invalid = "synthetic-non-scalar"
+	for _, tag := range []string{"!!bool", "!!int", "!!float", "!!null"} {
+		t.Run(tag, func(t *testing.T) {
+			candidate, err := builder.Build(t.Context(), "revision", time.Now(), []source.Document{
+				doc("base", "value: inherited\n"),
+				doc("dev", "value: "+tag+" '"+invalid+"'\n"),
+			})
+			if err == nil || candidate != nil {
+				t.Fatal("malformed tagged scalar produced a snapshot")
+			}
+			if strings.Contains(err.Error(), invalid) {
+				t.Fatal("error exposed the scalar value")
+			}
+		})
+	}
+}
+
+func TestTaggedScalarValues(t *testing.T) {
+	builder := NewBuilder(testutil.Config(t), testutil.Plain{})
+	candidate, err := builder.Build(t.Context(), "revision", time.Now(), []source.Document{
+		doc("base", "removed: inherited\n"),
+		doc(
+			"dev",
+			"removed: !!null null\nstring: !!str null\nint: !!int 001\nfloat: !!float 1.20\nbool: !!bool TRUE\n",
+		),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := Key{"project", "app", "dev"}
+	for name, want := range map[string]string{"string": "null", "int": "001", "float": "1.20", "bool": "TRUE"} {
+		if got, ok := candidate.Value(key, name); !ok || got != want {
+			t.Errorf("%s = %q, present = %t, want %q", name, got, ok, want)
+		}
+	}
+	if _, ok := candidate.Value(key, "removed"); ok {
+		t.Fatal("valid tagged null did not remove the inherited value")
+	}
+}
+
 func TestConcurrentPublication(t *testing.T) {
 	c := testutil.Config(t)
 	builder := NewBuilder(c, testutil.Plain{})

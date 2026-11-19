@@ -120,13 +120,18 @@ func parse(data []byte) (map[string]scalar, error) {
 			return nil, errors.New("invalid secret value")
 		}
 		switch v.Tag {
-		case "!!str", "!!bool", "!!int", "!!float":
-			out[k.Value] = scalar{value: v.Value}
-		case "!!null":
-			out[k.Value] = scalar{remove: true}
+		case "!!str", "!!bool", "!!int", "!!float", "!!null":
 		default:
 			return nil, errors.New("unsupported secret scalar type")
 		}
+		if v.Style&yaml.TaggedStyle != 0 {
+			// An explicit tag declares a type without validating the scalar text.
+			var decoded any
+			if err := v.Decode(&decoded); err != nil {
+				return nil, errors.New("invalid tagged secret scalar")
+			}
+		}
+		out[k.Value] = scalar{value: v.Value, remove: v.Tag == "!!null"}
 	}
 	return out, nil
 }
