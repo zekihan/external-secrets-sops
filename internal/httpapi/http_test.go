@@ -50,6 +50,7 @@ func TestRouter(t *testing.T) {
 		testutil.Logger(),
 	)
 	handler := api.Handler()
+	const invalidPath = "{\"error\":\"invalid_path\"}\n"
 	for _, tt := range []struct {
 		method, path, token string
 		status              int
@@ -70,6 +71,11 @@ func TestRouter(t *testing.T) {
 		{"GET", "/v1/refresh", "admin", 405, ""}, {"POST", "/v1/refresh", "admin", 202, ""},
 		{"GET", "/v1/secrets/project/../dev", "reader", 400, ""},
 		{"GET", "/v1/secrets/project/app/dev/a%2Fb", "reader", 400, ""},
+		{"GET", "/v1/secrets", "reader", 400, invalidPath},
+		{"GET", "/v1/secrets/project/app", "reader", 400, invalidPath},
+		{"GET", "/v1/secrets/project/app/dev/", "reader", 400, invalidPath},
+		{"GET", "/v1/secrets/project/app/dev/blank/extra", "reader", 400, invalidPath},
+		{"GET", "/v1/secrets/project%2Fapp/dev", "reader", 400, invalidPath},
 		{"GET", "/missing", "", 404, ""},
 	} {
 		t.Run(tt.method+tt.path+tt.token, func(t *testing.T) {
