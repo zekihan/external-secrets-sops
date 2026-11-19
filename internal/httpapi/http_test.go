@@ -125,6 +125,57 @@ type fakeCertificates certs.Status
 
 func (f fakeCertificates) Status() certs.Status { return certs.Status(f) }
 
+type certificatesFunc func() certs.Status
+
+func (f certificatesFunc) Status() certs.Status { return f() }
+
+func TestStatusReadinessMatchesReportedSnapshot(t *testing.T) {
+	store := new(snapshot.Store)
+	revision := strings.Repeat("a", 40)
+	current, err := snapshot.NewBuilder(testutil.Config(t), testutil.Plain{}).Build(
+		t.Context(), revision, time.Now(), []source.Document{{
+			Project:     "project",
+			Config:      "app",
+			Environment: "dev",
+			Encrypted:   []byte("{}"),
+		}},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	certificates := certificatesFunc(func() certs.Status {
+		store.Publish(current)
+		return certs.Status{}
+	})
+	api := New(
+		store,
+		new(fakeWorker),
+		nil,
+		certificates,
+		config.Credentials{Admin: "admin"},
+		"main",
+		time.Hour,
+		testutil.Logger(),
+	)
+	req := httptest.NewRequest(http.MethodGet, "/v1/status", http.NoBody)
+	req.Header.Set("Authorization", "Bearer admin")
+	rr := httptest.NewRecorder()
+	api.Handler().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status code = %d", rr.Code)
+	}
+	var status struct {
+		Revision string `json:"revision"`
+		Ready    bool   `json:"ready"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &status); err != nil {
+		t.Fatal(err)
+	}
+	if status.Revision != revision || !status.Ready {
+		t.Fatalf("status reports revision %q with ready=%t", status.Revision, status.Ready)
+	}
+}
+
 func TestCertificateStatusAndMetrics(t *testing.T) {
 	notAfter := time.Unix(1900000000, 0).UTC()
 	api := New(

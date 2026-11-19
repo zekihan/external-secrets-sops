@@ -21,15 +21,16 @@ type Redis struct {
 
 func New(cfg config.Redis, password string, logger *slog.Logger) *Redis {
 	return &Redis{client: redis.NewUniversalClient(&redis.UniversalOptions{
-		Addrs:        cfg.Addresses,
-		Username:     cfg.Username,
-		Password:     password,
-		MasterName:   cfg.MasterName,
-		DB:           cfg.DB,
-		DialTimeout:  3 * time.Second,
-		ReadTimeout:  3 * time.Second,
-		WriteTimeout: 3 * time.Second,
-		MaxRetries:   -1,
+		Addrs:                 cfg.Addresses,
+		Username:              cfg.Username,
+		Password:              password,
+		MasterName:            cfg.MasterName,
+		DB:                    cfg.DB,
+		DialTimeout:           3 * time.Second,
+		ReadTimeout:           3 * time.Second,
+		WriteTimeout:          3 * time.Second,
+		ContextTimeoutEnabled: true,
+		MaxRetries:            -1,
 	}), channel: cfg.Channel, logger: logger}
 }
 func (r *Redis) Connected() bool { return r.connected.Load() }

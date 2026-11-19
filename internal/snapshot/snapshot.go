@@ -30,6 +30,9 @@ func (s *Snapshot) Revision() string       { return s.revision }
 func (s *Snapshot) ValidatedAt() time.Time { return s.validatedAt }
 func (s *Snapshot) Bytes() int64           { return s.bytes }
 func (s *Snapshot) Count() int             { return len(s.data) }
+func (s *Snapshot) Ready(now time.Time, maxAge time.Duration) bool {
+	return s != nil && (maxAge == 0 || now.Sub(s.validatedAt) <= maxAge)
+}
 func (s *Snapshot) Values(k Key) (map[string]string, bool) {
 	v, ok := s.data[k]
 	return maps.Clone(v), ok
@@ -51,8 +54,7 @@ type Store struct{ active atomic.Pointer[Snapshot] }
 func (s *Store) Load() *Snapshot             { return s.active.Load() }
 func (s *Store) Publish(candidate *Snapshot) { s.active.Store(candidate) }
 func (s *Store) Ready(now time.Time, maxAge time.Duration) bool {
-	v := s.Load()
-	return v != nil && (maxAge == 0 || now.Sub(v.validatedAt) <= maxAge)
+	return s.Load().Ready(now, maxAge)
 }
 
 type Decrypter interface {
