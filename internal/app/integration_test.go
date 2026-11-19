@@ -238,7 +238,7 @@ func TestRestoreEncryptedCacheWhileGitOffline(t *testing.T) {
 	if _, err = builder.Build(t.Context(), revision, time.Now(), docs); err != nil {
 		t.Fatal(err)
 	}
-	if err = repository.Save(revision, time.Now()); err != nil {
+	if err = repository.Save(t.Context(), revision, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	if err = os.Rename(cfg.Git.URL, cfg.Git.URL+"-offline"); err != nil {

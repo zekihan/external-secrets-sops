@@ -17,7 +17,8 @@ type Source interface {
 	Fetch(context.Context) (string, error)
 	Cached() (source.Marker, error)
 	Documents(context.Context, string) ([]source.Document, error)
-	Save(string, time.Time) error
+	// Save checks cancellation before committing the marker. A nil error means it committed.
+	Save(context.Context, string, time.Time) error
 }
 type Builder interface {
 	Build(context.Context, string, time.Time, []source.Document) (*snapshot.Snapshot, error)
@@ -163,12 +164,10 @@ func (w *Worker) refresh(ctx context.Context) (err error) {
 	}
 	w.setPhase("persisting")
 	failureCode = "cache_write_failed"
-	if err = w.source.Save(revision, at); err != nil {
+	if err = w.source.Save(attempt, revision, at); err != nil {
 		return err
 	}
-	if err = attempt.Err(); err != nil {
-		return err
-	}
+	// Finish publishing the committed revision even if cancellation arrived during the commit.
 	w.store.Publish(candidate)
 	w.logger.InfoContext(
 		ctx,

@@ -148,7 +148,7 @@ func (r *Repository) Cached() (Marker, error) {
 	return m, nil
 }
 
-func (r *Repository) Save(revision string, at time.Time) error {
+func (r *Repository) Save(ctx context.Context, revision string, at time.Time) error {
 	if r.repo == nil || r.stage == "" || revision != r.fetched {
 		return errors.New("git candidate is not available")
 	}
@@ -184,6 +184,9 @@ func (r *Repository) Save(revision string, at time.Time) error {
 	}
 	if err = f.Close(); err != nil {
 		return errors.New("cannot close cache marker")
+	}
+	if err = ctx.Err(); err != nil {
+		return err
 	}
 	if err = os.Rename(name, filepath.Join(r.dir, "validated.json")); err != nil {
 		return errors.New("cannot publish cache marker")

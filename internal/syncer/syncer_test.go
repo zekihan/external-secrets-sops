@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/zekihan/external-secrets-sops/internal/decrypt"
 	"github.com/zekihan/external-secrets-sops/internal/snapshot"
 	"github.com/zekihan/external-secrets-sops/internal/source"
 	"github.com/zekihan/external-secrets-sops/internal/testutil"
@@ -35,7 +36,10 @@ func (f *fakeSource) Cached() (source.Marker, error) {
 func (f *fakeSource) Documents(context.Context, string) ([]source.Document, error) {
 	return f.docs, nil
 }
-func (f *fakeSource) Save(r string, at time.Time) error {
+func (f *fakeSource) Save(ctx context.Context, r string, at time.Time) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	f.marker = source.Marker{Revision: r, ValidatedAt: at}
 	return nil
 }
@@ -119,6 +123,94 @@ func TestRefreshAndRestore(t *testing.T) {
 	if _, ok := store.Load().
 		Values(snapshot.Key{Project: "project", Config: "app", Environment: "dev"}); ok {
 		t.Fatal("deleted document retained")
+	}
+}
+
+type saveHookSource struct {
+	*source.Repository
+	save func(context.Context, string, time.Time) error
+}
+
+func (s saveHookSource) Save(ctx context.Context, revision string, at time.Time) error {
+	return s.save(ctx, revision, at)
+}
+
+func TestRefreshCancellationAtCacheCommit(t *testing.T) {
+	for _, afterCommit := range []bool{false, true} {
+		name := "before commit"
+		if afterCommit {
+			name = "after commit"
+		}
+		t.Run(name, func(t *testing.T) {
+			cfg := testutil.Config(t)
+			remote := testutil.InitRepo(t, cfg.Git.URL, cfg.Git.Branch)
+			file := "generated/project/app/dev/values.yaml"
+			first := testutil.Commit(
+				t, remote, map[string][]byte{file: testutil.Encrypt(t, "a: first")},
+			)
+			repo, err := source.New(cfg, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			src := &saveHookSource{Repository: repo, save: repo.Save}
+			store := new(snapshot.Store)
+			builder := snapshot.NewBuilder(cfg, decrypt.SOPS{})
+			worker := New(cfg.Refresh, src, builder, store, testutil.Logger())
+			if err = worker.refresh(t.Context()); err != nil {
+				t.Fatal(err)
+			}
+			previous := store.Load()
+			second := testutil.Commit(
+				t, remote, map[string][]byte{file: testutil.Encrypt(t, "a: second")},
+			)
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			src.save = func(attempt context.Context, revision string, at time.Time) error {
+				if !afterCommit {
+					cancel()
+				}
+				err := repo.Save(attempt, revision, at)
+				if afterCommit {
+					cancel()
+				}
+				return err
+			}
+			err = worker.refresh(ctx)
+			reopened, openErr := source.New(cfg, "")
+			if openErr != nil {
+				t.Fatal(openErr)
+			}
+			restored := new(snapshot.Store)
+			New(cfg.Refresh, reopened, builder, restored, testutil.Logger()).restore(t.Context())
+			current, cached := store.Load(), restored.Load()
+			if cached == nil {
+				t.Fatal("restart did not restore a snapshot")
+			}
+			want := first
+			if afterCommit {
+				want = second
+			}
+			if current.Revision() != want || cached.Revision() != want ||
+				!cached.ValidatedAt().Equal(current.ValidatedAt()) {
+				t.Fatalf(
+					"active=%s restored=%s want=%s",
+					current.Revision(),
+					cached.Revision(),
+					want,
+				)
+			}
+			if afterCommit {
+				if err != nil {
+					t.Fatalf("committed refresh returned %v", err)
+				}
+			} else if !errors.Is(err, context.Canceled) || current != previous {
+				t.Fatalf(
+					"canceled refresh returned %v, replaced snapshot=%v",
+					err,
+					current != previous,
+				)
+			}
+		})
 	}
 }
 
