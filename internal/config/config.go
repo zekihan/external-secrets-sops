@@ -246,6 +246,11 @@ func (c Config) Validate() error {
 			u.Fragment != "" {
 			return errors.New("git.url must be HTTPS without embedded credentials, or a local path")
 		}
+		if port := u.Port(); port != "" {
+			if n, err := strconv.ParseUint(port, 10, 16); err != nil || n == 0 {
+				return errors.New("git.url HTTPS port must be between 1 and 65535")
+			}
+		}
 	} else if !filepath.IsAbs(c.Git.URL) && !strings.HasPrefix(c.Git.URL, "./") && !strings.HasPrefix(c.Git.URL, "../") {
 		return errors.New("local git.url must be absolute or start with ./ or ../")
 	}
