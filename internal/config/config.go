@@ -45,8 +45,8 @@ type Git struct {
 	TokenEnv string `yaml:"tokenEnv"`
 }
 type Scope struct {
-	Projects     []string `yaml:"projects"`
-	Environments []string `yaml:"environments"`
+	Projects     stringList `yaml:"projects"`
+	Environments stringList `yaml:"environments"`
 }
 type Refresh struct {
 	Interval     time.Duration `yaml:"interval"`
@@ -56,13 +56,13 @@ type Refresh struct {
 	MaxStaleness time.Duration `yaml:"maxStaleness"`
 }
 type Redis struct {
-	Enabled     bool     `yaml:"enabled"`
-	Addresses   []string `yaml:"addresses"`
-	Username    string   `yaml:"username"`
-	PasswordEnv string   `yaml:"passwordEnv"`
-	MasterName  string   `yaml:"masterName"`
-	DB          int      `yaml:"db"`
-	Channel     string   `yaml:"channel"`
+	Enabled     bool       `yaml:"enabled"`
+	Addresses   stringList `yaml:"addresses"`
+	Username    string     `yaml:"username"`
+	PasswordEnv string     `yaml:"passwordEnv"`
+	MasterName  string     `yaml:"masterName"`
+	DB          int        `yaml:"db"`
+	Channel     string     `yaml:"channel"`
 }
 type Auth struct {
 	ReaderTokenEnv         string `yaml:"readerTokenEnv"`
@@ -85,6 +85,20 @@ type Credentials struct {
 	Git                 string
 	Redis               string
 	GitHubWebhookSecret string
+}
+
+type stringList []string
+
+func (s *stringList) UnmarshalYAML(node *yaml.Node) error {
+	if node.Kind == yaml.SequenceNode {
+		// Decoding directly into []string skips null elements.
+		for _, entry := range node.Content {
+			if entry.ShortTag() == "!!null" {
+				return errors.New("configuration list contains a null entry")
+			}
+		}
+	}
+	return node.Decode((*[]string)(s))
 }
 
 func Defaults() Config {

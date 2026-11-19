@@ -69,3 +69,40 @@ func TestCheckConfigRejectsHTTPForbiddenToken(t *testing.T) {
 		t.Fatal("check-config did not return the sanitized token validation error")
 	}
 }
+
+func TestCheckConfigRejectsNullListEntries(t *testing.T) {
+	t.Setenv("ESS_READER_TOKEN", "synthetic-reader")
+	t.Setenv("ESS_ADMIN_TOKEN", "synthetic-admin")
+	t.Setenv("ESS_GIT_TOKEN", "")
+	t.Setenv("ESS_GITHUB_WEBHOOK_SECRET", "")
+	const base = "git:\n  url: ./repo\n"
+	const scope = "scope:\n  projects: [project]\n  environments: [dev]\n"
+	for _, tc := range []struct {
+		name, contents string
+		wantCode       int
+	}{
+		{"null project", base + "scope:\n  projects: [project, null]\n  environments: [dev]\n", 1},
+		{"null environment alias", base + "  tokenEnv: &missing null\n" +
+			"scope:\n  projects: [project]\n  environments: [dev, *missing]\n", 1},
+		{"null Redis address", base + scope +
+			"redis:\n  enabled: true\n  passwordEnv: ''\n  addresses: ['redis.example.invalid:6379', ~]\n", 1},
+		{"quoted null alias", base + "scope:\n  projects: [project, &name 'null']\n  environments: [dev, *name]\n", 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			filename := filepath.Join(t.TempDir(), "config.yaml")
+			if err := os.WriteFile(filename, []byte(tc.contents), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			var stdout, stderr bytes.Buffer
+			code := run([]string{"check-config", "--config", filename}, &stdout, &stderr)
+			if code != tc.wantCode {
+				t.Fatalf("check-config exit = %d, want %d, stdout = %q, stderr = %q",
+					code, tc.wantCode, stdout.String(), stderr.String())
+			}
+			if tc.wantCode != 0 &&
+				(stdout.Len() != 0 || stderr.String() != "invalid configuration YAML\n") {
+				t.Fatal("expected only a configuration YAML error")
+			}
+		})
+	}
+}
