@@ -24,6 +24,9 @@ func (SOPS) Decrypt(ctx context.Context, encrypted []byte) (plain []byte, err er
 	if _, err := validateDocument(encrypted); err != nil {
 		return nil, errors.New("SOPS metadata violates local backend or work policy")
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	plain, err = decrypt.Data(encrypted, "yaml")
 	if err != nil {
 		return nil, errors.New("SOPS decryption or integrity verification failed")

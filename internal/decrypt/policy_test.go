@@ -304,6 +304,25 @@ func TestLocalShamirAndIntegrity(t *testing.T) {
 	}
 }
 
+func TestShamirThresholdAboveKeyGroupCount(t *testing.T) {
+	const groups = 2
+	encrypted := testutil.EncryptGroups(t, "value: fixture\n", groups)
+	policy := SOPS{}
+	if err := policy.ValidateCandidate(t.Context(), [][]byte{encrypted}); err != nil {
+		t.Fatalf("valid Shamir document rejected: %v", err)
+	}
+
+	var fixture map[string]any
+	if err := yaml.Unmarshal(encrypted, &fixture); err != nil {
+		t.Fatal(err)
+	}
+	fixture["sops"].(map[string]any)["shamir_threshold"] = groups + 1
+	invalid := encodeFixture(t, fixture)
+	if err := policy.ValidateCandidate(t.Context(), [][]byte{encrypted, invalid}); err == nil {
+		t.Fatal("accepted a Shamir threshold that exceeds the number of key groups")
+	}
+}
+
 func TestMetadataAmbiguityAndPluginsRejected(t *testing.T) {
 	encrypted := testutil.Encrypt(t, "value: fixture\n")
 	for name, data := range map[string][]byte{
