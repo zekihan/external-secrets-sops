@@ -60,6 +60,40 @@ func TestValidation(t *testing.T) {
 	}
 }
 
+func TestLoadGitHTTPSPort(t *testing.T) {
+	for _, tt := range []struct {
+		port    string
+		wantErr bool
+	}{
+		{"", false},
+		{":443", false},
+		{":65535", false},
+		{":0", true},
+		{":65536", true},
+		{":99999999999999999999", true},
+	} {
+		t.Run("port="+tt.port, func(t *testing.T) {
+			filename := filepath.Join(t.TempDir(), "config.yaml")
+			text := "git:\n  url: https://example.invalid" + tt.port + "/repo.git\n" +
+				"scope:\n  projects: [project]\n  environments: [dev]\n"
+			if err := os.WriteFile(filename, []byte(text), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			lookups := 0
+			_, creds, err := Load(filename, func(name string) string {
+				lookups++
+				return "fixture-" + name
+			})
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("Load() error = %v, want error = %v", err, tt.wantErr)
+			}
+			if tt.wantErr && (lookups != 0 || creds != (Credentials{})) {
+				t.Fatal("invalid Git URL consulted or returned credentials")
+			}
+		})
+	}
+}
+
 func TestServerTransport(t *testing.T) {
 	for _, tt := range []struct {
 		address  string
