@@ -91,10 +91,14 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("/v1/refresh", a.auth(true, a.method(http.MethodPost, a.refresh)))
 	mux.HandleFunc("/v1/status", a.auth(true, a.method(http.MethodGet, a.status)))
 	mux.HandleFunc("/metrics", a.auth(true, a.method(http.MethodGet, a.metrics)))
-	mux.HandleFunc(
-		"/",
-		func(w http.ResponseWriter, _ *http.Request) { a.failure(w, 404, "not_found") },
-	)
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		// The ESO webhook provider treats 404 as secret deletion.
+		if r.URL.Path == "/v1/secrets" || strings.HasPrefix(r.URL.Path, "/v1/secrets/") {
+			a.failure(w, http.StatusBadRequest, "invalid_path")
+			return
+		}
+		a.failure(w, http.StatusNotFound, "not_found")
+	})
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		defer func() {
