@@ -121,7 +121,7 @@ func TestShallowCandidateAndStorageLifecycle(t *testing.T) {
 	if _, err = r.repo.CommitObject(plumbing.NewHash(old)); err == nil {
 		t.Fatal("historical commit retained")
 	}
-	if err = r.Save(good, time.Now()); err != nil {
+	if err = r.Save(t.Context(), good, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	markerBefore, err := os.ReadFile(filepath.Join(r.dir, "validated.json"))
@@ -170,7 +170,7 @@ func TestShallowCandidateAndStorageLifecycle(t *testing.T) {
 		if got, e := r.Fetch(t.Context()); e != nil || got != tip {
 			t.Fatalf("divergent fetch=%s %v", got, e)
 		}
-		if err = r.Save(tip, time.Now()); err != nil {
+		if err = r.Save(t.Context(), tip, time.Now()); err != nil {
 			t.Fatal(err)
 		}
 		n := cacheBytes(t, r.dir)
@@ -189,7 +189,7 @@ func TestShallowCandidateAndStorageLifecycle(t *testing.T) {
 	if _, err = final.Cached(); err != nil {
 		t.Fatal("cancellation damaged cache", err)
 	}
-	if err = r.Save(good, time.Now()); err == nil {
+	if err = r.Save(t.Context(), good, time.Now()); err == nil {
 		t.Fatal("saved revision without a fetched candidate")
 	}
 }
@@ -291,7 +291,7 @@ func TestLegacyCacheRecovery(t *testing.T) {
 	if _, err = r.Fetch(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if err = r.Save(revision, time.Now()); err != nil {
+	if err = r.Save(t.Context(), revision, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	fresh, _ := New(cfg, "")

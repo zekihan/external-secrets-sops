@@ -43,7 +43,7 @@ func TestGitLifecycle(t *testing.T) {
 		t.Fatal("created worktree")
 	}
 	at := time.Now().UTC()
-	if err = r.Save(first, at); err != nil {
+	if err = r.Save(t.Context(), first, at); err != nil {
 		t.Fatal(err)
 	}
 	restored, _ := New(cfg, "")
