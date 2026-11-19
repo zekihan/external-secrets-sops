@@ -82,6 +82,9 @@ func validateDocument(encrypted []byte) (int, error) {
 	if len(groups) == 0 || len(groups) > maxKeyGroups {
 		return 0, errors.New("invalid SOPS key group count")
 	}
+	if len(groups) > 1 && tree.Metadata.ShamirThreshold > len(groups) {
+		return 0, errors.New("key group count is below Shamir threshold")
+	}
 	total := 0
 	for _, group := range groups {
 		if len(group) == 0 {
