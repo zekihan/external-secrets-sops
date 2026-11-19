@@ -2,6 +2,7 @@ package certs
 
 import (
 	"crypto/tls"
+	"encoding/pem"
 	"os"
 	"path/filepath"
 	"testing"
@@ -119,4 +120,34 @@ func TestReloadRejectsOversizedFiles(t *testing.T) {
 	if got := serial(t, r); got != 20 || r.Status().Failures != 1 {
 		t.Fatalf("oversized: serial %d, %+v", got, r.Status())
 	}
+}
+
+func TestRejectsMalformedCertificateChain(t *testing.T) {
+	ca := testutil.NewCA(t)
+	dir, certFile, keyFile := volume(t, ca, 30)
+	r, err := New(certFile, keyFile, testutil.Logger())
+	if err != nil {
+		t.Fatal(err)
+	}
+	certPEM, keyPEM := ca.Issue(t, 31)
+	malformed := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: []byte("invalid DER")})
+	testutil.WriteSecretVolume(
+		t,
+		dir,
+		map[string][]byte{"tls.crt": append(certPEM, malformed...), "tls.key": keyPEM},
+	)
+
+	t.Run("startup", func(t *testing.T) {
+		if _, err := New(certFile, keyFile, testutil.Logger()); err == nil {
+			t.Fatal("startup accepted a malformed certificate chain")
+		}
+	})
+	t.Run("reload", func(t *testing.T) {
+		r.Reload(t.Context())
+		status := r.Status()
+		if got := serial(t, r); got != 30 || !status.Failing || status.Failures != 1 ||
+			status.Successes != 0 {
+			t.Fatalf("malformed chain: serial %d, %+v", got, status)
+		}
+	})
 }
