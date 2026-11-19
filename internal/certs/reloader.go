@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"io"
 	"log/slog"
@@ -59,12 +60,12 @@ func New(certFile, keyFile string, logger *slog.Logger) (*Reloader, error) {
 	if err != nil {
 		return nil, errors.New("cannot load server TLS certificate and key")
 	}
-	certificate, err := tls.X509KeyPair(certPEM, keyPEM)
+	certificate, err := parseKeyPair(certPEM, keyPEM)
 	if err != nil {
 		return nil, errors.New("cannot load server TLS certificate and key")
 	}
 	r.current.Store(&active{
-		certificate: &certificate,
+		certificate: certificate,
 		digest:      digest(certPEM, keyPEM),
 		loadedAt:    time.Now(),
 	})
@@ -109,13 +110,13 @@ func (r *Reloader) Reload(ctx context.Context) {
 	if r.failing && sum == r.failed {
 		return
 	}
-	certificate, err := tls.X509KeyPair(certPEM, keyPEM)
+	certificate, err := parseKeyPair(certPEM, keyPEM)
 	if err != nil {
 		// Also covers a read that straddled a non-atomic cert/key replacement.
 		r.fail(ctx, sum, "parse")
 		return
 	}
-	r.current.Store(&active{certificate: &certificate, digest: sum, loadedAt: time.Now()})
+	r.current.Store(&active{certificate: certificate, digest: sum, loadedAt: time.Now()})
 	r.failing = false
 	r.successes.Add(1)
 	r.logger.InfoContext(
@@ -167,6 +168,20 @@ func (r *Reloader) read() ([]byte, []byte, error) {
 		return nil, nil, err
 	}
 	return certPEM, keyPEM, nil
+}
+
+func parseKeyPair(certPEM, keyPEM []byte) (*tls.Certificate, error) {
+	certificate, err := tls.X509KeyPair(certPEM, keyPEM)
+	if err != nil {
+		return nil, err
+	}
+	// X509KeyPair parses the leaf, but clients parse every certificate we serve.
+	for _, der := range certificate.Certificate[1:] {
+		if _, err := x509.ParseCertificate(der); err != nil {
+			return nil, err
+		}
+	}
+	return &certificate, nil
 }
 
 func readFile(path string) ([]byte, error) {
