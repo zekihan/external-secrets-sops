@@ -10,6 +10,16 @@
         "github-actions"
       ],
       "pinDigests": true
+    },
+    {
+      "description": "SOPS parses with go.yaml.in/yaml/v3; internal/decrypt/policy.go must use the same parser",
+      "matchPackageNames": [
+        "go.yaml.in/yaml/v3"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "enabled": false
     }
   ]
 }
