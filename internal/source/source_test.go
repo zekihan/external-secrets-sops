@@ -1,8 +1,11 @@
 package source
 
 import (
+	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -144,5 +147,121 @@ func TestCorruptCacheAndSelectedPaths(t *testing.T) {
 	// A forced divergent commit must also replace the selected remote ref.
 	if err = wt.Reset(&git.ResetOptions{Mode: git.HardReset}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestNewRejectsInvalidBranch(t *testing.T) {
+	cfg := testutil.Config(t)
+	cfg.Git.Branch = "bad..branch"
+	if _, err := New(cfg, ""); err == nil || err.Error() != "invalid Git branch" {
+		t.Fatalf("New with invalid branch: %v", err)
+	}
+}
+
+func TestSaveRequiresFetchedCandidate(t *testing.T) {
+	cfg := testutil.Config(t)
+	remote := testutil.InitRepo(t, cfg.Git.URL, "main")
+	revision := testutil.Commit(
+		t,
+		remote,
+		map[string][]byte{"generated/project/app/dev/values.yaml": []byte("one")},
+	)
+	r, err := New(cfg, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// No Fetch yet: there is no candidate to publish.
+	if err = r.Save(t.Context(), revision, time.Now()); err == nil {
+		t.Fatal("Save succeeded without a fetched candidate")
+	}
+	if _, err = r.Cached(); err == nil {
+		t.Fatal("cache published without a fetched candidate")
+	}
+	fetched, err := r.Fetch(t.Context())
+	if err != nil || fetched != revision {
+		t.Fatalf("fetch = %s %v", fetched, err)
+	}
+	if err = r.Save(
+		t.Context(), "0000000000000000000000000000000000000000", time.Now(),
+	); err == nil {
+		t.Fatal("Save succeeded for a revision that was not fetched")
+	}
+	// A canceled context must not publish the marker.
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if err = r.Save(ctx, revision, time.Now()); err == nil {
+		t.Fatal("Save succeeded with a canceled context")
+	}
+	if _, err = r.Cached(); err == nil {
+		t.Fatal("canceled Save published the cache marker")
+	}
+	if err = r.Save(t.Context(), revision, time.Now()); err != nil {
+		t.Fatalf("Save after cancellation: %v", err)
+	}
+}
+
+func TestCachedRejectsTamperedMarker(t *testing.T) {
+	cfg := testutil.Config(t)
+	remote := testutil.InitRepo(t, cfg.Git.URL, "main")
+	revision := testutil.Commit(
+		t,
+		remote,
+		map[string][]byte{"generated/project/app/dev/values.yaml": []byte("one")},
+	)
+	r, err := New(cfg, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = r.Fetch(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	at := time.Now().UTC().Truncate(time.Second)
+	if err = r.Save(t.Context(), revision, at); err != nil {
+		t.Fatal(err)
+	}
+	markerPath := filepath.Join(r.dir, "validated.json")
+	valid, err := os.ReadFile(markerPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, mutate := range map[string]func(*Marker){
+		"future validation time": func(m *Marker) { m.ValidatedAt = time.Now().Add(time.Hour) },
+		"unknown generation":     func(m *Marker) { m.Generation = "slot-9" },
+		"non-hash revision":      func(m *Marker) { m.Revision = "SECRET_CANARY" },
+		"wrong fingerprint":      func(m *Marker) { m.Fingerprint = "0" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			var m Marker
+			if err := json.Unmarshal(valid, &m); err != nil {
+				t.Fatal(err)
+			}
+			mutate(&m)
+			b, err := json.Marshal(m)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(markerPath, b, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			fresh, _ := New(cfg, "")
+			if _, err := fresh.Cached(); err == nil {
+				t.Fatal("tampered marker accepted")
+			} else if strings.Contains(err.Error(), "SECRET_CANARY") {
+				t.Fatalf("error leaked marker content: %v", err)
+			}
+		})
+	}
+	if err := os.WriteFile(markerPath, []byte("{not json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	fresh, _ := New(cfg, "")
+	if _, err := fresh.Cached(); err == nil {
+		t.Fatal("malformed marker accepted")
+	}
+	if _, err := fresh.Documents(t.Context(), revision); err == nil {
+		t.Fatal("documents read despite malformed marker")
+	}
+	if _, err := fresh.Fetch(t.Context()); err == nil {
+		t.Fatal("fetch proceeded despite malformed marker")
 	}
 }
