@@ -1,11 +1,13 @@
 package certs
 
 import (
+	"context"
 	"crypto/tls"
 	"encoding/pem"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/zekihan/external-secrets-sops/internal/testutil"
 )
@@ -119,6 +121,36 @@ func TestReloadRejectsOversizedFiles(t *testing.T) {
 	r.Reload(t.Context())
 	if got := serial(t, r); got != 20 || r.Status().Failures != 1 {
 		t.Fatalf("oversized: serial %d, %+v", got, r.Status())
+	}
+}
+
+func TestRunPollsUntilCancelled(t *testing.T) {
+	ca := testutil.NewCA(t)
+	dir, certFile, keyFile := volume(t, ca, 40)
+	r, err := New(certFile, keyFile, testutil.Logger())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan struct{})
+	go func() {
+		r.Run(ctx, 5*time.Millisecond)
+		close(done)
+	}()
+	certPEM, keyPEM := ca.Issue(t, 41)
+	testutil.WriteSecretVolume(t, dir, map[string][]byte{"tls.crt": certPEM, "tls.key": keyPEM})
+	testutil.Eventually(t, func() bool { return serial(t, r) == 41 })
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Run did not stop after cancellation")
+	}
+	// A pair written after shutdown is not picked up.
+	certPEM, keyPEM = ca.Issue(t, 42)
+	testutil.WriteSecretVolume(t, dir, map[string][]byte{"tls.crt": certPEM, "tls.key": keyPEM})
+	if got := serial(t, r); got != 41 {
+		t.Fatalf("serial after Run returned = %d", got)
 	}
 }
 
