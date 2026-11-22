@@ -67,6 +67,55 @@ func TestSemantics(t *testing.T) {
 		t.Fatal("base mutated")
 	}
 }
+func TestAccessorsAndRenew(t *testing.T) {
+	c := testutil.Config(t)
+	at := time.Now().Add(-time.Hour)
+	s, err := NewBuilder(c, testutil.Plain{}).Build(
+		t.Context(),
+		"revision",
+		at,
+		[]source.Document{doc("dev", "alpha: one\nbeta: two\n")},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wantBytes int64
+	values, _ := s.Values(Key{"project", "app", "dev"})
+	for name, value := range values {
+		wantBytes += int64(len(name) + len(value))
+	}
+	if s.Revision() != "revision" || !s.ValidatedAt().Equal(at) || s.Bytes() != wantBytes ||
+		s.Count() != 1 {
+		t.Fatalf("accessors: revision=%q at=%v bytes=%d (want %d) count=%d",
+			s.Revision(), s.ValidatedAt(), s.Bytes(), wantBytes, s.Count())
+	}
+	if !s.Ready(at.Add(30*time.Minute), time.Hour) ||
+		s.Ready(at.Add(2*time.Hour), time.Hour) ||
+		!s.Ready(at.Add(2*time.Hour), 0) {
+		t.Fatal("Ready did not honor maxAge")
+	}
+	var nilSnapshot *Snapshot
+	if nilSnapshot.Ready(at, 0) {
+		t.Fatal("nil snapshot ready")
+	}
+	renewed := s.Renew(at.Add(2 * time.Hour))
+	if renewed == s {
+		t.Fatal("Renew returned the same snapshot")
+	}
+	if !renewed.ValidatedAt().Equal(at.Add(2*time.Hour)) ||
+		renewed.Revision() != s.Revision() || renewed.Bytes() != s.Bytes() ||
+		!renewed.Ready(at.Add(2*time.Hour), time.Hour) {
+		t.Fatalf("renewed mismatch: %+v", renewed)
+	}
+	if v, _ := renewed.Value(Key{"project", "app", "dev"}, "alpha"); v != "one" {
+		t.Fatal("Renew lost values")
+	}
+	// Renewal must not mutate the original snapshot's freshness.
+	if s.Ready(at.Add(2*time.Hour), time.Hour) {
+		t.Fatal("Renew extended the original snapshot")
+	}
+}
+
 func TestRejectInvalid(t *testing.T) {
 	c := testutil.Config(t)
 	for _, plain := range []string{"", "[]", "a: [b]", "a: {b: c}", "a: 1\na: 2", "a: &x test\nb: *x", "<<: {a: b}", "a: value\n---\nb: value", "a: !!binary YQ==", "'../x': value"} {
