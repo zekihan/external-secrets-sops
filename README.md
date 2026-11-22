@@ -109,7 +109,7 @@ SOPS' embedded API does not consistently support cancellation. An operation may 
 
 ## Development
 
-Install Redis server for integration tests, golangci-lint **2.15.0**, and GoReleaser **2.19.0** for release builds.
+Install Redis server for integration tests, golangci-lint **2.15.0**, and GoReleaser **2.20.2** for release builds.
 
 ```sh
 make fmt                 # explicit source formatting
@@ -162,7 +162,7 @@ operator review; no trust, credential, or network policy changes are needed.
 
 Run `make build/release/docker` followed by `make test/container` with a local
 Unix-socket Docker engine supporting Linux amd64 and arm64 execution (Docker
-Desktop, or an engine with QEMU/binfmt configured). The PR workflow runs the same
+Desktop, or an engine with QEMU/binfmt configured). The publication workflow runs the same
 container check after building binaries. It enforces digest pins, pulls the bases
 with an empty Docker credential configuration, builds and loads each architecture,
 runs the real `version` entrypoint offline with a read-only filesystem, and checks
@@ -188,7 +188,7 @@ encoder implementation as `serve`. It does not start HTTP/Redis, fetch Git, load
 server credentials, write a cache, or persist plaintext. It validates the whole
 explicit dependency scope before emitting only the requested bundle as a JSON
 object of strings. Failures leave stdout empty and use sanitized stderr errors.
-The process ignores stdin, including Terraform external data queries such as `{}`.
+Dummy and SOPS input modes ignore stdin, including Terraform external data queries such as `{}`.
 Treat successful stdout as secret data.
 
 Synthetic fixtures require a regular `.dummy-secrets` file directly inside the
@@ -259,9 +259,9 @@ candidates; never save resolver output as CI artifacts. The normal template, dep
 `make test/release` creates unpublished snapshot archives and checks all seven
 platform archives, SHA-256 checksums and embedded source/version metadata. It runs
 the native archived binary against synthetic `resolve`, memory-input, and `sha256`
-contracts, including candidate rejection and recovery. PR CI runs this gate.
-`make release` requires a tag matching `VERSION`, verifies an unpublished release
-build first, then publishes from that same checkout. Allocate a new version/tag
+contracts, including candidate rejection and recovery.
+`make release` requires a tag matching `VERSION` and verifies an unpublished release
+build without publishing or announcing it. Allocate a new version/tag
 before publication; the existing v3.0.1 release lacks these capabilities.
 Container version aliases are emitted only for version tags; main builds retain
 latest and commit tags. The image workflow records the source commit and published
